@@ -36,6 +36,19 @@ def _is_bulk_mock_genealogy_title(title: str) -> bool:
     return bool(_BULK_MOCK_TITLE.fullmatch(title))
 
 
+def _full_access_username_set() -> set[str]:
+    """登录后可浏览库内全部族谱与成员（含他人创建与批量导入）。逗号分隔，见环境变量 FULL_ACCESS_USERNAMES。"""
+    raw = os.environ.get("FULL_ACCESS_USERNAMES", "3377673546")
+    return {x.strip() for x in raw.split(",") if x.strip()}
+
+
+def _user_has_full_access(session: Session, user_id: int) -> bool:
+    u = session.get(User, user_id)
+    if not u:
+        return False
+    return u.username in _full_access_username_set()
+
+
 def _pct_two_decimals(part: int, whole: int) -> str:
     """占比（%），先按高精度比例换算再四舍五入到两位小数。"""
     if whole <= 0:
@@ -49,7 +62,7 @@ def _pct_two_decimals(part: int, whole: int) -> str:
 def _database_connect_arg():
     """
     优先使用分项配置（适合中文密码、避免一行 URL 在 Windows 下编码问题）。
-    若设置了 GENEALOGY_DB_HOST，则走 URL.create；否则使用 GENEALOGY_DATABASE_URL 字符串。
+    若设置了 GENEALOGY_DB_HOST,则走 URL.create;否则使用 GENEALOGY_DATABASE_URL 字符串。
     """
     if os.environ.get("GENEALOGY_DB_HOST", "").strip():
         return URL.create(
@@ -140,7 +153,7 @@ def _parse_revision_date(raw: str) -> date | None:
 
 
 def _year_from_form_field(raw: str) -> int | None:
-    """从 YYYY-MM-DD（date 控件）或纯数字年份解析为整数年份。"""
+    """从 YYYY-MM-DD(date 控件)或纯数字年份解析为整数年份。"""
     s = raw.strip()
     if not s:
         return None
@@ -156,7 +169,7 @@ def _year_from_form_field(raw: str) -> int | None:
 
 
 def _iso_date_from_form_prefix(raw: str) -> date | None:
-    """若 raw 以 YYYY-MM-DD 开头则解析为 date，否则 None。"""
+    """若 raw 以 YYYY-MM-DD 开头则解析为 date,否则 None。"""
     s = raw.strip()
     if len(s) < 10 or s[4] != "-" or s[7] != "-":
         return None
@@ -344,6 +357,8 @@ def user_can_access_genealogy(user_id: int, genealogy_id: int) -> bool:
         g = s.get(Genealogy, genealogy_id)
         if not g:
             return False
+        if _user_has_full_access(s, user_id):
+            return True
         if _is_bulk_mock_genealogy_title(g.title):
             return False
         if g.created_by == user_id:
@@ -357,6 +372,8 @@ def user_can_access_genealogy(user_id: int, genealogy_id: int) -> bool:
 
 def accessible_genealogy_ids(user_id: int) -> list[int]:
     with Session(engine) as s:
+        if _user_has_full_access(s, user_id):
+            return sorted(s.scalars(select(Genealogy.id)).all())
         created = s.scalars(
             select(Genealogy.id).where(Genealogy.created_by == user_id)
         ).all()
