@@ -133,8 +133,12 @@ def inject_leave_modal_options():
 
 @login_manager.user_loader
 def load_user(uid: str):
+    try:
+        uid_i = int(uid)
+    except (TypeError, ValueError):
+        return None
     with Session(engine) as s:
-        return s.get(User, int(uid))
+        return s.get(User, uid_i)
 
 
 def get_session() -> Session:
@@ -224,6 +228,15 @@ def _validate_member_cn_name(raw: str) -> str | None:
 
 
 _BIO_MAX_LEN = 500
+_USER_USERNAME_MAX = 64
+_USER_EMAIL_MAX = 128
+_GENEALOGY_TITLE_MAX = 200
+_GENEALOGY_SURNAME_MAX = 64
+
+
+def _escape_like_pattern(s: str) -> str:
+    """转义 ILIKE/LIKE 中的 %、_ 与反斜杠，避免用户搜索被当作通配符。"""
+    return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def _validate_bio_len(raw: str) -> str | None:
@@ -408,6 +421,13 @@ def register():
         if not u or not p:
             flash("请填写用户名和密码")
             return render_template("register.html")
+        if len(u) > _USER_USERNAME_MAX:
+            flash(f"用户名过长（最多 {_USER_USERNAME_MAX} 个字符）")
+            return render_template("register.html")
+        em = request.form.get("email", "").strip() or None
+        if em is not None and len(em) > _USER_EMAIL_MAX:
+            flash(f"邮箱过长（最多 {_USER_EMAIL_MAX} 个字符）")
+            return render_template("register.html")
         with Session(engine) as s:
             if s.scalar(select(User).where(User.username == u)):
                 flash("用户名已存在")
@@ -415,7 +435,7 @@ def register():
             user = User(
                 username=u,
                 password_hash=generate_password_hash(p),
-                email=request.form.get("email", "").strip() or None,
+                email=em,
             )
             s.add(user)
             s.commit()
@@ -528,6 +548,11 @@ def genealogy_new():
         if not title or not surname:
             flash("谱名与姓氏必填")
             return render_template("genealogy_form.html", g=None)
+        if len(title) > _GENEALOGY_TITLE_MAX or len(surname) > _GENEALOGY_SURNAME_MAX:
+            flash(
+                f"谱名最多 {_GENEALOGY_TITLE_MAX} 字、姓氏最多 {_GENEALOGY_SURNAME_MAX} 字，请缩短后重试"
+            )
+            return render_template("genealogy_form.html", g=None)
         with Session(engine) as s:
             g = Genealogy(
                 title=title,
@@ -581,8 +606,6 @@ def genealogy_edit(gid: int):
             flash("族谱不存在")
             return redirect(url_for("genealogies"))
         if request.method == "POST":
-            g.title = request.form.get("title", "").strip() or g.title
-            g.surname = request.form.get("surname", "").strip() or g.surname
             rd = request.form.get("revision_date", "").strip()
             rev = _parse_revision_date(rd) if rd else None
             if rd and rev is None:
@@ -591,6 +614,15 @@ def genealogy_edit(gid: int):
             if rev is not None and rev > date.today():
                 flash("修谱日期不能晚于今天")
                 return redirect(url_for("genealogy_edit", gid=gid))
+            t = request.form.get("title", "").strip() or g.title
+            su = request.form.get("surname", "").strip() or g.surname
+            if len(t) > _GENEALOGY_TITLE_MAX or len(su) > _GENEALOGY_SURNAME_MAX:
+                flash(
+                    f"谱名最多 {_GENEALOGY_TITLE_MAX} 字、姓氏最多 {_GENEALOGY_SURNAME_MAX} 字，请缩短后重试"
+                )
+                return redirect(url_for("genealogy_edit", gid=gid))
+            g.title = t
+            g.surname = su
             g.revision_date = rev
             s.commit()
             flash("已保存")
@@ -616,6 +648,9 @@ def genealogy_invite(gid: int):
         flash("无权邀请")
         return redirect(url_for("genealogies"))
     uname = request.form.get("username", "").strip()
+    if not uname:
+        flash("请填写对方用户名")
+        return redirect(url_for("genealogy_edit", gid=gid))
     with Session(engine) as s:
         g = s.get(Genealogy, gid)
         if g.created_by != current_user.id:
@@ -658,7 +693,9 @@ def members_list(gid: int):
         with Session(engine) as s:
             stmt = select(Member).where(Member.tree_id == gid)
             if q:
-                stmt = stmt.where(Member.name.ilike(f"%{q}%"))
+                stmt = stmt.where(
+                    Member.name.ilike(f"%{_escape_like_pattern(q)}%", escape="\\")
+                )
             stmt = stmt.order_by(Member.member_id).limit(500)
             rows = s.scalars(stmt).all()
     except SQLAlchemyError:
@@ -704,6 +741,15 @@ def member_new(gid: int):
             if bio_err:
                 flash(bio_err)
                 return render_template("member_form.html", gid=gid, m=None)
+            gn_raw = request.form.get("generation_level", "").strip()
+            if gn_raw:
+                try:
+                    gl = int(gn_raw)
+                except ValueError:
+                    flash("辈分须为整数，或留空")
+                    return render_template("member_form.html", gid=gid, m=None)
+            else:
+                gl = None
             m = Member(
                 tree_id=gid,
                 name=nm,
@@ -714,7 +760,7 @@ def member_new(gid: int):
                 father_id=father_id,
                 mother_id=mother_id,
                 spouse_id=spouse_id,
-                generation_level=int(gn) if (gn := request.form.get("generation_level", "").strip()) else None,
+                generation_level=gl,
                 created_by=current_user.id,
             )
             try:
@@ -789,7 +835,14 @@ def member_edit(gid: int, mid: int):
             m.mother_id = mother_id
             m.spouse_id = spouse_id
             gn = request.form.get("generation_level", "").strip()
-            m.generation_level = int(gn) if gn else None
+            if gn:
+                try:
+                    m.generation_level = int(gn)
+                except ValueError:
+                    flash("辈分须为整数，或留空")
+                    return render_template("member_form.html", gid=gid, m=m)
+            else:
+                m.generation_level = None
             try:
                 s.commit()
             except SQLAlchemyError as e:
@@ -851,10 +904,15 @@ def tree_preview(gid: int):
     if not user_can_access_genealogy(current_user.id, gid):
         flash("无权访问")
         return redirect(url_for("genealogies"))
-    root_id = request.args.get("root")
+    root_id = request.args.get("root", "").strip()
     with Session(engine) as s:
         if root_id:
-            root = s.get(Member, int(root_id))
+            try:
+                rid = int(root_id)
+            except ValueError:
+                flash("根成员 ID 须为整数")
+                return redirect(url_for("tree_preview", gid=gid))
+            root = s.get(Member, rid)
             if not root or root.tree_id != gid:
                 flash("根成员无效")
                 return redirect(url_for("tree_preview", gid=gid))
@@ -899,9 +957,14 @@ def ancestors_view(gid: int):
     if not user_can_access_genealogy(current_user.id, gid):
         flash("无权访问")
         return redirect(url_for("genealogies"))
-    mid = request.args.get("id")
+    mid = request.args.get("id", "").strip()
     rows = []
     if mid:
+        try:
+            mid_i = int(mid)
+        except ValueError:
+            flash("成员 ID 须为整数")
+            return render_template("ancestors.html", gid=gid, rows=[], mid=mid)
         with Session(engine) as s:
             sql = text(
                 """
@@ -920,7 +983,7 @@ def ancestors_view(gid: int):
                 FROM anc WHERE hop > 0 ORDER BY member_id, hop
                 """
             )
-            raw = s.execute(sql, {"mid": int(mid), "gid": gid}).mappings().all()
+            raw = s.execute(sql, {"mid": mid_i, "gid": gid}).mappings().all()
             rows = sorted(raw, key=lambda r: (r["hop"], r["member_id"]))
     return render_template("ancestors.html", gid=gid, rows=rows, mid=mid)
 
