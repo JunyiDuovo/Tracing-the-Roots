@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}寻根溯源{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="{{ url_for('dashboard') if current_user.is_authenticated else url_for('login') }}">寻根溯源</a>
+    <nav>
+      {% if current_user.is_authenticated %}
+      <a href="{{ url_for('dashboard') }}">总览</a>
+      <a href="{{ url_for('genealogies') }}">族谱</a>
+      <span class="user">{{ current_user.username }}</span>
+      <a href="{{ url_for('logout') }}">退出</a>
+      {% else %}
+      <a href="{{ url_for('login') }}">登录</a>
+      <a href="{{ url_for('register') }}">注册</a>
+      {% endif %}
+    </nav>
+  </header>
+  <main class="container">
+    {% if back_nav %}
+    <div class="back-nav-wrap">
+      <button type="button" class="btn secondary js-back-nav" data-back-url="{{ back_nav.url }}">← 返回{{ back_nav.label }}</button>
+    </div>
+    {% endif %}
+    {% block body %}{% endblock %}
+  </main>
+  {% if back_nav %}
+  <div id="leave-unsaved-modal" class="flash-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="leave-unsaved-title" hidden>
+    <div class="flash-modal-dialog">
+      <button type="button" class="flash-modal-close" id="leave-unsaved-x" aria-label="关闭">&times;</button>
+      <h2 id="leave-unsaved-title" class="flash-modal-title">未保存的更改</h2>
+      <div class="flash-modal-body">
+        {% if leave_modal_show_save %}
+        <p class="flash-modal-line">当前有已填写或修改的内容，是否保存后再离开？</p>
+        {% else %}
+        <p class="flash-modal-line">当前有已填写的内容，离开将不会保存。确定要返回登录吗？</p>
+        {% endif %}
+      </div>
+      <div class="leave-unsaved-footer">
+        {% if leave_modal_show_save %}
+        <div class="leave-unsaved-footer-save">
+          <button type="button" class="btn" id="leave-btn-save">保存并离开</button>
+        </div>
+        {% endif %}
+        <div class="leave-unsaved-footer-actions">
+          <button type="button" class="btn secondary" id="leave-btn-discard">不保存，直接返回</button>
+          <button type="button" class="btn secondary" id="leave-btn-cancel">取消</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="{{ url_for('static', filename='js/back-nav.js') }}" defer></script>
+  {% endif %}
+  {% with messages = get_flashed_messages() %}
+  {% if messages %}
+  <div id="flash-modal" class="flash-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="flash-modal-title">
+    <div class="flash-modal-dialog">
+      <button type="button" class="flash-modal-close" id="flash-modal-x" aria-label="关闭">&times;</button>
+      <h2 id="flash-modal-title" class="flash-modal-title">提示</h2>
+      <div class="flash-modal-body">
+        {% for m in messages %}<p class="flash-modal-line">{{ m }}</p>{% endfor %}
+      </div>
+      <div class="flash-modal-footer">
+        <button type="button" class="btn flash-modal-ok" id="flash-modal-ok">确定</button>
+      </div>
+    </div>
+  </div>
+  <script>
+  (function () {
+    var root = document.getElementById("flash-modal");
+    if (!root) return;
+    var ok = document.getElementById("flash-modal-ok");
+    var xb = document.getElementById("flash-modal-x");
+    function close() {
+      root.hidden = true;
+      root.setAttribute("aria-hidden", "true");
+      document.removeEventListener("keydown", onKey);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") close();
+    }
+    ok.addEventListener("click", close);
+    xb.addEventListener("click", close);
+    document.addEventListener("keydown", onKey);
+    ok.focus();
+  })();
+  </script>
+  {% endif %}
+  {% endwith %}
+</body>
+</html>

@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}{% if g %}编辑{% else %}新建{% endif %}族谱{% endblock %}
+{% block body %}
+<div class="card">
+  <h1>{% if g %}编辑族谱{% else %}新建族谱{% endif %}</h1>
+  <form method="post" id="genealogy-main-form" data-track-dirty="1">
+    <label>谱名</label>
+    <input name="title" value="{{ g.title if g else '' }}" required>
+    <label>姓氏</label>
+    <input name="surname" value="{{ g.surname if g else '' }}" required>
+    <label>修谱日期</label>
+    <input id="revision_date" name="revision_date" type="date" min="0800-01-01"
+      value="{{ g.revision_date.isoformat() if g and g.revision_date else '' }}">
+    <p class="muted" style="font-size:0.9em">不可选择今天之后的日期。</p>
+    <p class="genealogy-form-actions">
+      <button class="btn" type="submit">保存</button>
+      {% if g %}<a class="btn secondary" href="{{ url_for('members_list', gid=g.id) }}">成员管理</a>{% endif %}
+      {% if g and is_creator %}
+      <button type="button" class="btn danger" id="delete-genealogy-open">删除族谱</button>
+      {% endif %}
+    </p>
+  </form>
+  {% if g and is_creator %}
+  <form id="delete-genealogy-form" method="post" action="{{ url_for('genealogy_delete', gid=g.id) }}" class="visually-hidden-form"></form>
+  <div id="delete-genealogy-modal" class="flash-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="delete-genealogy-title" hidden>
+    <div class="flash-modal-dialog">
+      <button type="button" class="flash-modal-close" id="delete-genealogy-x" aria-label="关闭">&times;</button>
+      <h2 id="delete-genealogy-title" class="flash-modal-title">删除族谱</h2>
+      <div class="flash-modal-body">
+        <p class="flash-modal-line">请确认是否删除族谱，删除后不可恢复，请谨慎操作！</p>
+      </div>
+      <div class="confirm-modal-footer">
+        <button type="submit" class="btn" form="delete-genealogy-form">是，我确认</button>
+        <button type="button" class="btn secondary" id="delete-genealogy-cancel">我再想想</button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  {% if g %}
+  <h2>邀请协作者</h2>
+  <p>仅创建者可邀请。被邀请用户登录后即可编辑本族谱成员。</p>
+  <form method="post" action="{{ url_for('genealogy_invite', gid=g.id) }}" data-track-dirty="1">
+    <label>对方用户名</label>
+    <input name="username" placeholder="已注册用户名" required>
+    <p><button class="btn" type="submit">发送邀请（直接加入）</button></p>
+  </form>
+  {% if collabs %}
+  <h3>当前协作者</h3>
+  <ul>{% for u in collabs %}<li>{{ u.username }}</li>{% endfor %}</ul>
+  {% endif %}
+  {% endif %}
+</div>
+<script>
+(function () {
+  var el = document.getElementById("revision_date");
+  if (!el) return;
+  function todayLocalISO() {
+    var d = new Date();
+    var y = d.getFullYear();
+    var m = String(d.getMonth() + 1).padStart(2, "0");
+    var day = String(d.getDate()).padStart(2, "0");
+    return y + "-" + m + "-" + day;
+  }
+  function capRevisionMax() {
+    var t = todayLocalISO();
+    el.max = t;
+    if (el.value && el.value > t) el.value = "";
+  }
+  capRevisionMax();
+  el.addEventListener("change", capRevisionMax);
+  el.addEventListener("input", capRevisionMax);
+})();
+(function () {
+  var modal = document.getElementById("delete-genealogy-modal");
+  var openBtn = document.getElementById("delete-genealogy-open");
+  if (!modal || !openBtn) return;
+  var cancel = document.getElementById("delete-genealogy-cancel");
+  var xb = document.getElementById("delete-genealogy-x");
+  function close() {
+    modal.hidden = true;
+    modal.setAttribute("aria-hidden", "true");
+    document.removeEventListener("keydown", onKey);
+  }
+  function open() {
+    modal.hidden = false;
+    modal.removeAttribute("aria-hidden");
+    document.addEventListener("keydown", onKey);
+  }
+  function onKey(e) {
+    if (e.key === "Escape") close();
+  }
+  openBtn.addEventListener("click", open);
+  cancel.addEventListener("click", close);
+  xb.addEventListener("click", close);
+})();
+</script>
+{% endblock %}

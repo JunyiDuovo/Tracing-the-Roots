@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}祖先树{% endblock %}
+{% block body %}
+<h1>人物祖先查询 <small style="font-weight:400">族谱 #{{ gid }}</small></h1>
+<div class="card">
+  <form method="get" data-track-dirty="1">
+    <label>成员 member_id</label>
+    <input name="id" value="{{ mid or '' }}" required>
+    <button class="btn" type="submit">追溯祖先</button>
+  </form>
+</div>
+{% if mid and rows %}
+<div class="card">
+  <p>按代数（hop）列出父辈以上血亲：</p>
+  <table>
+    <thead><tr><th>hop</th><th>member_id</th><th>name</th><th>gender</th><th>birth_year</th></tr></thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.hop }}</td>
+        <td>{{ r.member_id }}</td>
+        <td>{{ r.name }}</td>
+        <td>{{ r.gender }}</td>
+        <td>{{ r.birth_year or '' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <h3>缩进示意</h3>
+  <div class="tree-line">{% for r in rows|reverse %}{{ '  ' * (r.hop - 1) }}↑ {{ r.name }} ({{ r.member_id }})
+{% endfor %}</div>
+</div>
+{% elif mid %}
+<div class="card"><p>未找到祖先或成员不存在。</p></div>
+{% endif %}
+{% endblock %}

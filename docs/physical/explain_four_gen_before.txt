@@ -1,0 +1,14 @@
+（占位）请在本机 PostgreSQL 上执行：
+
+EXPLAIN (ANALYZE, BUFFERS, VERBOSE)
+WITH RECURSIVE down AS (
+    SELECT id, full_name, 0 AS gen FROM member WHERE id = <祖先ID>
+    UNION ALL
+    SELECT c.id, c.full_name, d.gen + 1
+    FROM down d
+    JOIN member c ON c.father_id = d.id OR c.mother_id = d.id
+    WHERE d.gen < 4
+)
+SELECT id, full_name, gen FROM down WHERE gen > 0;
+
+在**未创建** father_id/mother_id 辅助索引（或已 DROP）的情况下，将完整输出粘贴替换本文件内容。

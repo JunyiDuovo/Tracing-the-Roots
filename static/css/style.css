@@ -1,0 +1,208 @@
+:root {
+  --bg: #f6f4f0;
+  --card: #fff;
+  --text: #1a1a1a;
+  --muted: #5c5c5c;
+  --accent: #6b4e3d;
+  --line: #e0dcd4;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1.5rem;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  font-size: 1.075rem;
+}
+.brand {
+  font-weight: 700;
+  font-size: 1.25rem;
+  color: var(--accent);
+  text-decoration: none;
+}
+nav a { margin-left: 1rem; color: var(--text); text-decoration: none; }
+nav a:hover { text-decoration: underline; }
+.user { margin-left: 1rem; color: var(--muted); font-size: 1.075rem; }
+.container { max-width: 960px; margin: 1.5rem auto; padding: 0 1rem; }
+.back-nav-wrap {
+  margin-bottom: 0.75rem;
+}
+.leave-unsaved-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.leave-unsaved-footer-save {
+  display: flex;
+  justify-content: flex-start;
+}
+.leave-unsaved-footer-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.leave-unsaved-footer-actions .btn {
+  flex: 0 1 auto;
+}
+.flash-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(26, 22, 18, 0.45);
+}
+.flash-modal-backdrop[hidden] {
+  display: none !important;
+}
+.flash-modal-dialog {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  background: var(--card);
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+  padding: 1.25rem 1.25rem 1rem;
+}
+.flash-modal-close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.6rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.flash-modal-close:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+.flash-modal-title {
+  margin: 0 2rem 0.75rem 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.flash-modal-body {
+  margin-bottom: 1.1rem;
+  color: var(--text);
+  font-size: 0.98rem;
+}
+.flash-modal-line {
+  margin: 0 0 0.5rem;
+}
+.flash-modal-line:last-child {
+  margin-bottom: 0;
+}
+.flash-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+.flash-modal-ok {
+  min-width: 5rem;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+h1 { font-size: 1.5rem; margin-top: 0; }
+.stats { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+.stat { min-width: 120px; }
+.stat strong { display: block; font-size: 1.75rem; color: var(--accent); }
+.stat-ratios {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  min-width: 120px;
+}
+.stat-ratio-pair {
+  min-width: 120px;
+}
+.stat-ratio-label {
+  display: block;
+  margin-top: 0.15rem;
+}
+table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+th, td { text-align: left; padding: 0.5rem 0.4rem; border-bottom: 1px solid var(--line); }
+th { color: var(--muted); font-weight: 600; }
+th .th-en {
+  display: block;
+  font-weight: 500;
+  font-size: 0.78rem;
+  color: var(--muted);
+  opacity: 0.9;
+  margin-top: 0.15rem;
+}
+.btn {
+  display: inline-block;
+  padding: 0.45rem 0.9rem;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 6px;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+.btn.secondary { background: #8a8178; }
+.btn.danger {
+  background: #a63d3d;
+  color: #fff;
+}
+.btn.danger:hover {
+  filter: brightness(1.05);
+}
+.confirm-modal-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+.genealogy-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.visually-hidden-form {
+  display: none;
+}
+input, select, textarea {
+  width: 100%;
+  max-width: 420px;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+}
+label { display: block; margin: 0.5rem 0 0.2rem; color: var(--muted); font-size: 0.9rem; }
+.tree-line { font-family: ui-monospace, Consolas, monospace; white-space: pre; font-size: 0.9rem; }

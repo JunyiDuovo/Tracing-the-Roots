@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}树形预览{% endblock %}
+{% block body %}
+<h1>树形预览 <small style="font-weight:400">族谱 #{{ gid }}</small></h1>
+<div class="card">
+  <p>从无双亲的节点开始，或指定根成员 member_id：</p>
+  <form method="get" data-track-dirty="1">
+    <input name="root" placeholder="根成员 member_id" value="{{ request.args.get('root','') }}">
+    <button class="btn" type="submit">刷新</button>
+  </form>
+  {% if root %}
+  <p>当前根：<strong>{{ root.name }}</strong> (member_id {{ root.member_id }})</p>
+  {% endif %}
+</div>
+<div class="card">
+  {% if lines %}
+  <div class="tree-line">{% for depth, name, mid in lines %}{{ '  ' * depth }}├─ {{ name }} ({{ mid }})
+{% endfor %}</div>
+  {% else %}
+  <p>暂无成员数据。</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}族谱列表{% endblock %}
+{% block body %}
+<h1>族谱</h1>
+<p><a class="btn" href="{{ url_for('genealogy_new') }}">新建族谱</a></p>
+<div class="card">
+  <table>
+    <thead><tr><th>ID</th><th>谱名</th><th>姓氏</th><th></th></tr></thead>
+    <tbody>
+      {% for g in rows %}
+      <tr>
+        <td>{{ g.id }}</td>
+        <td>{{ g.title }}</td>
+        <td>{{ g.surname }}</td>
+        <td>
+          <a href="{{ url_for('members_list', gid=g.id) }}">成员</a> ·
+          <a href="{{ url_for('tree_preview', gid=g.id) }}">树</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

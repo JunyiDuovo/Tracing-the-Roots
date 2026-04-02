@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}登录 — 寻根溯源{% endblock %}
+{% block body %}
+<div class="card">
+  <h1>登录</h1>
+  <form method="post" data-track-dirty="1">
+    <label>用户名</label>
+    <input name="username" required autocomplete="username">
+    <label>密码</label>
+    <input name="password" type="password" required autocomplete="current-password">
+    <p><button class="btn" type="submit">登录</button>
+    <a class="btn secondary" href="{{ url_for('register') }}" style="margin-left:.5rem">注册</a></p>
+  </form>
+</div>
+{% endblock %}

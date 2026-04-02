@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}{% if m %}编辑{% else %}新增{% endif %}成员{% endblock %}
+{% block body %}
+<div class="card">
+  <h1>{% if m %}编辑成员{% else %}新增成员{% endif %}</h1>
+  <form method="post" id="member-form" data-track-dirty="1">
+    <label for="member_name">姓名</label>
+    <p class="muted" style="font-size:0.9em;margin:0 0 0.35em">须为 2～4 个汉字（含繁体、生僻字及扩展区汉字），不可含字母、数字或符号。生僻字可能占多个 UTF-16 长度，故不设输入框字数上限，以保存时校验为准。</p>
+    <input id="member_name" name="name" type="text" autocomplete="name" inputmode="text" lang="zh-Hans" required
+      value="{% if request.method == 'POST' %}{{ request.form.get('name', '') }}{% else %}{{ m.name if m else '' }}{% endif %}">
+    {% if request.method == 'POST' %}
+      {% set graw = request.form.get('gender', 'Male') %}
+    {% else %}
+      {% set graw = m.gender if m else 'Male' %}
+    {% endif %}
+    {% set gsel = 'Female' if graw in ['F', 'Female', 'FEMALE', '女'] else 'Male' %}
+    <label>性别</label>
+    <select name="gender" required>
+      <option value="Male" {% if gsel == 'Male' %}selected{% endif %}>男</option>
+      <option value="Female" {% if gsel == 'Female' %}selected{% endif %}>女</option>
+    </select>
+    {% if request.method == 'POST' %}
+      {% set bdv = request.form.get('birth_date', '') %}
+      {% set ddv = request.form.get('death_date', '') %}
+    {% else %}
+      {% set bdv = ("%04d-01-01"|format(m.birth_year)) if m and m.birth_year is not none else '' %}
+      {% set ddv = ("%04d-01-01"|format(m.death_year)) if m and m.death_year is not none else '' %}
+    {% endif %}
+    <label>出生日期（保存为出生年）</label>
+    <input id="birth_date" name="birth_date" type="date" value="{{ bdv }}" min="0800-01-01">
+    <label>去世日期（保存为去世年，须不早于出生日期；可不填）</label>
+    <input id="death_date" name="death_date" type="date" value="{{ ddv }}" min="0800-01-01">
+    <p class="muted" style="font-size:0.9em">仅年份会写入数据库。出生、去世均不可选今天之后的日期；去世不可早于出生。</p>
+    <label>辈分 generation_level</label>
+    <input name="generation_level" type="number" value="{% if request.method == 'POST' %}{{ request.form.get('generation_level', '') }}{% else %}{{ m.generation_level if m and m.generation_level is not none else '' }}{% endif %}">
+    <label>父亲 member_id father_id</label>
+    <p class="muted" style="font-size:0.9em;margin:0 0 0.35em">填写系统中任意族谱里已录入成员的 ID（可异姓通婚）；该成员须为<strong>男性</strong>。不存在的 ID 或女性会提示错误，请核对。</p>
+    <input name="father_id" value="{% if request.method == 'POST' %}{{ request.form.get('father_id', '') }}{% else %}{{ m.father_id if m and m.father_id else '' }}{% endif %}" placeholder="留空表示暂不录入" inputmode="numeric" pattern="[0-9]*">
+    <label>母亲 member_id mother_id</label>
+    <p class="muted" style="font-size:0.9em;margin:0 0 0.35em">填写系统中任意族谱里已录入成员的 ID（可异姓通婚）；该成员须为<strong>女性</strong>。不存在的 ID 或男性会提示错误，请核对。</p>
+    <input name="mother_id" value="{% if request.method == 'POST' %}{{ request.form.get('mother_id', '') }}{% else %}{{ m.mother_id if m and m.mother_id else '' }}{% endif %}" placeholder="留空表示暂不录入" inputmode="numeric" pattern="[0-9]*">
+    <label>配偶 member_id spouse_id</label>
+    <input name="spouse_id" value="{% if request.method == 'POST' %}{{ request.form.get('spouse_id', '') }}{% else %}{{ m.spouse_id if m and m.spouse_id else '' }}{% endif %}" placeholder="可选">
+    <p class="muted" style="font-size:0.9em">配偶可为其他族谱成员；配偶 ID 亦须为系统中已存在的成员编号（member_id，员列表第一列）。</p>
+    <label for="bio_field">生平 bio</label>
+    <p class="muted" style="font-size:0.9em;margin:0 0 0.35em">不超过 <strong>500</strong> 字；汉字、字母、标点、空格等合计计数。</p>
+    <textarea id="bio_field" name="bio" rows="4" maxlength="500">{% if request.method == 'POST' %}{{ request.form.get('bio', '') }}{% else %}{{ m.bio if m else '' }}{% endif %}</textarea>
+    <p>
+      <button class="btn" type="submit">保存</button>
+      <a class="btn secondary" href="{{ url_for('members_list', gid=gid) }}">返回</a>
+      {% if m %}
+      <button class="btn secondary" type="submit" name="_delete" value="1" onclick="return confirm('确定删除？');">删除</button>
+      {% endif %}
+    </p>
+  </form>
+</div>
+<script>
+(function () {
+  var ABS_MIN = '0800-01-01';
+  var birth = document.getElementById('birth_date');
+  var death = document.getElementById('death_date');
+  if (!birth || !death) return;
+
+  function todayLocalISO() {
+    var d = new Date();
+    var y = d.getFullYear();
+    var m = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+  }
+
+  function syncDateBounds() {
+    var today = todayLocalISO();
+    birth.max = today;
+    death.max = today;
+    if (birth.value && birth.value > today) {
+      birth.value = '';
+    }
+    if (death.value && death.value > today) {
+      death.value = '';
+    }
+    var b = birth.value;
+    if (b) {
+      death.min = b;
+      if (death.value && death.value < b) {
+        death.value = '';
+      }
+    } else {
+      death.min = ABS_MIN;
+    }
+  }
+
+  birth.addEventListener('change', syncDateBounds);
+  birth.addEventListener('input', syncDateBounds);
+  death.addEventListener('change', syncDateBounds);
+  death.addEventListener('input', syncDateBounds);
+  syncDateBounds();
+})();
+
+(function () {
+  var form = document.getElementById('member-form');
+  var nameInput = document.getElementById('member_name');
+  if (!form || !nameInput) return;
+
+  var hanNameRe = null;
+  try {
+    hanNameRe = new RegExp("^(\\p{Script=Han}){2,4}$", "u");
+  } catch (e1) {
+    try {
+      hanNameRe = new RegExp("^\\p{Han}{2,4}$", "u");
+    } catch (e2) {}
+  }
+
+  function validCnName(s) {
+    s = s.trim();
+    if (!s) return false;
+    if (!hanNameRe) return true;
+    return hanNameRe.test(s);
+  }
+
+  form.addEventListener('submit', function (e) {
+    nameInput.setCustomValidity('');
+    var v = nameInput.value.trim();
+    if (!v) return;
+    if (!validCnName(v)) {
+      e.preventDefault();
+      nameInput.setCustomValidity('须为 2～4 个汉字（含繁体、生僻字），不可含字母、数字或符号');
+      nameInput.reportValidity();
+    }
+  });
+  nameInput.addEventListener('input', function () {
+    nameInput.setCustomValidity('');
+  });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}亲缘通路{% endblock %}
+{% block body %}
+<h1>两人亲缘关系 <small style="font-weight:400">族谱 #{{ gid }}</small></h1>
+<div class="card">
+  <p>在血缘（父子/母女）与婚姻关系构成的无向图上做广度优先搜索；若存在通路则列出经过的成员姓名。</p>
+  <form method="post" data-track-dirty="1">
+    <label>成员 A ID</label>
+    <input name="a" value="{{ a or '' }}" required>
+    <label>成员 B ID</label>
+    <input name="b" value="{{ b or '' }}" required>
+    <p><button class="btn" type="submit">查询通路</button></p>
+  </form>
+</div>
+{% if path %}
+<div class="card">
+  <h2>通路</h2>
+  <p>→ {{ path | join(' → ') }}</p>
+</div>
+{% endif %}
+{% endblock %}
