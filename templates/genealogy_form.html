@@ -1,25 +1,39 @@
 {% extends "base.html" %}
-{% block title %}{% if g %}编辑{% else %}新建{% endif %}族谱{% endblock %}
+{% block title %}{% if g %}编辑{% else %}新建{% endif %}族谱 — 寻根溯源{% endblock %}
 {% block body %}
-<div class="card">
-  <h1>{% if g %}编辑族谱{% else %}新建族谱{% endif %}</h1>
-  <form method="post" id="genealogy-main-form" data-track-dirty="1">
-    <label>谱名</label>
-    <input name="title" value="{{ g.title if g else '' }}" required>
-    <label>姓氏</label>
-    <input name="surname" value="{{ g.surname if g else '' }}" required>
-    <label>修谱日期</label>
-    <input id="revision_date" name="revision_date" type="date" min="0800-01-01"
-      value="{{ g.revision_date.isoformat() if g and g.revision_date else '' }}">
-    <p class="muted" style="font-size:0.9em">不可选择今天之后的日期。</p>
-    <p class="genealogy-form-actions">
-      <button class="btn" type="submit">保存</button>
-      {% if g %}<a class="btn secondary" href="{{ url_for('members_list', gid=g.id) }}">成员管理</a>{% endif %}
-      {% if g and is_creator %}
-      <button type="button" class="btn danger" id="delete-genealogy-open">删除族谱</button>
-      {% endif %}
-    </p>
-  </form>
+<div class="page-inner page-inner--narrow">
+  <header class="page-header">
+    <h1 class="page-title">{% if g %}编辑族谱{% else %}新建族谱{% endif %}</h1>
+    {% if g %}<p class="page-kicker">族谱 ID <span class="kbd">{{ g.id }}</span></p>{% endif %}
+  </header>
+
+  <section class="card card--elevated">
+    <h2 class="form-section-title">基本信息</h2>
+    <form method="post" id="genealogy-main-form" data-track-dirty="1" class="form-stack">
+      <div class="field">
+        <label for="gf-title">谱名</label>
+        <input id="gf-title" name="title" value="{{ g.title if g else '' }}" required>
+      </div>
+      <div class="field">
+        <label for="gf-surname">姓氏</label>
+        <input id="gf-surname" name="surname" value="{{ g.surname if g else '' }}" required>
+      </div>
+      <div class="field">
+        <label for="revision_date">修谱日期</label>
+        <input id="revision_date" name="revision_date" type="date" min="0800-01-01"
+          value="{{ g.revision_date.isoformat() if g and g.revision_date else '' }}">
+        <p class="field-hint">不可选择今天之后的日期。</p>
+      </div>
+      <div class="form-actions">
+        <button class="btn" type="submit">保存</button>
+        {% if g %}<a class="btn secondary" href="{{ url_for('members_list', gid=g.id) }}">成员管理</a>{% endif %}
+        {% if g and is_creator %}
+        <button type="button" class="btn danger" id="delete-genealogy-open">删除族谱</button>
+        {% endif %}
+      </div>
+    </form>
+  </section>
+
   {% if g and is_creator %}
   <form id="delete-genealogy-form" method="post" action="{{ url_for('genealogy_delete', gid=g.id) }}" class="visually-hidden-form"></form>
   <div id="delete-genealogy-modal" class="flash-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="delete-genealogy-title" hidden>
@@ -36,18 +50,26 @@
     </div>
   </div>
   {% endif %}
+
   {% if g %}
-  <h2>邀请协作者</h2>
-  <p>仅创建者可邀请。被邀请用户登录后即可编辑本族谱成员。</p>
-  <form method="post" action="{{ url_for('genealogy_invite', gid=g.id) }}" data-track-dirty="1">
-    <label>对方用户名</label>
-    <input name="username" placeholder="已注册用户名" required>
-    <p><button class="btn" type="submit">发送邀请（直接加入）</button></p>
-  </form>
-  {% if collabs %}
-  <h3>当前协作者</h3>
-  <ul>{% for u in collabs %}<li>{{ u.username }}</li>{% endfor %}</ul>
-  {% endif %}
+  <section class="card card--elevated">
+    <h2 class="form-section-title">邀请协作者</h2>
+    <p class="muted">仅创建者可邀请。被邀请用户登录后即可编辑本族谱成员。</p>
+    <form method="post" action="{{ url_for('genealogy_invite', gid=g.id) }}" data-track-dirty="1" class="form-stack form-stack--inline">
+      <div class="field field--grow">
+        <label for="invite-user">对方用户名</label>
+        <input id="invite-user" name="username" placeholder="已注册用户名" required>
+      </div>
+      <div class="field field--btn">
+        <label class="label-spacer">&nbsp;</label>
+        <button class="btn" type="submit">发送邀请</button>
+      </div>
+    </form>
+    {% if collabs %}
+    <h3 class="subsection-title">当前协作者</h3>
+    <ul class="collab-list">{% for u in collabs %}<li>{{ u.username }}</li>{% endfor %}</ul>
+    {% endif %}
+  </section>
   {% endif %}
 </div>
 <script>

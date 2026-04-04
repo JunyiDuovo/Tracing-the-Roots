@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}寻根溯源 — 家谱与血脉传承{% endblock %}
+{% block body_class %}page-landing{% endblock %}
+{% block header_class %}top--landing{% endblock %}
+{% block main_class %}main-full{% endblock %}
+{% block body %}
+<section class="landing-hero" aria-labelledby="landing-title">
+  <div class="landing-hero-bg" aria-hidden="true"></div>
+  <div class="landing-hero-content">
+    <p class="landing-eyebrow">血脉相连 · 谱系传世</p>
+    <h1 id="landing-title" class="landing-title">寻根溯源</h1>
+    <p class="landing-lead">
+      记录家族世系，保存先辈事迹，让分散在各地的亲人重新找到共同的根<br>
+      从一支家谱开始，把记忆写成可传承的脉络
+    </p>
+    <div class="landing-cta">
+      <a class="landing-btn landing-btn--primary" href="{{ url_for('login') }}">登录</a>
+      <a class="landing-btn landing-btn--outline" href="{{ url_for('register') }}">注册账户</a>
+    </div>
+  </div>
+</section>
+
+<section class="landing-features" aria-label="功能特点">
+  <div class="landing-features-inner">
+    <article class="landing-card">
+      <div class="landing-card-icon" aria-hidden="true">谱</div>
+      <h2 class="landing-card-title">编修族谱</h2>
+      <p class="landing-card-text">建立谱籍、录入辈分与支系，把家族结构整理得清清楚楚。</p>
+    </article>
+    <article class="landing-card">
+      <div class="landing-card-icon" aria-hidden="true">系</div>
+      <h2 class="landing-card-title">梳理关系</h2>
+      <p class="landing-card-text">父母、配偶与血缘脉络可追溯，树形与祖先查询一目了然。</p>
+    </article>
+    <article class="landing-card">
+      <div class="landing-card-icon" aria-hidden="true">承</div>
+      <h2 class="landing-card-title">协作传承</h2>
+      <p class="landing-card-text">邀请家人共同维护，修谱成果由至亲共同守护与延续。</p>
+    </article>
+  </div>
+</section>
+
+<section class="landing-footnote">
+  <p class="landing-quote">
+    「谱以载道，系以联情」愿每一份家谱，都能成为后人回望来路的灯。
+  </p>
+</section>
+{% endblock %}

@@ -1,16 +1,33 @@
 {% extends "base.html" %}
 {% block title %}注册 — 寻根溯源{% endblock %}
+{% block body_class %}page-auth{% endblock %}
+{% block header_class %}top--auth{% endblock %}
 {% block body %}
-<div class="card">
-  <h1>注册</h1>
-  <form method="post" action="{{ url_for('register') }}" data-track-dirty="1">
-    <label>用户名</label>
-    <input name="username" required autocomplete="username">
-    <label>密码</label>
-    <input name="password" type="password" required autocomplete="new-password">
-    <label>邮箱（可选）</label>
-    <input name="email" type="email" autocomplete="email">
-    <p><button class="btn" type="submit">创建账户</button></p>
-  </form>
+<div class="auth-wrap">
+  <div class="auth-panel">
+    <div class="auth-panel-header">
+      <p class="auth-eyebrow">开启家谱之旅</p>
+      <h1 class="auth-title">创建账户</h1>
+      <p class="auth-sub">注册后即可创建族谱、录入成员并与家人协作</p>
+    </div>
+    <form method="post" class="auth-form" action="{{ url_for('register') }}" data-track-dirty="1" autocomplete="on">
+      <div class="auth-field">
+        <label for="reg-username">用户名</label>
+        <input id="reg-username" name="username" required autocomplete="username" placeholder="用于登录，请牢记">
+      </div>
+      <div class="auth-field">
+        <label for="reg-password">密码</label>
+        <input id="reg-password" name="password" type="password" required autocomplete="new-password" placeholder="请设置安全密码">
+      </div>
+      <div class="auth-field">
+        <label for="reg-email">邮箱（可选）</label>
+        <input id="reg-email" name="email" type="email" autocomplete="email" placeholder="便于日后找回与通知">
+      </div>
+      <div class="auth-actions">
+        <button class="auth-btn auth-btn--primary" type="submit">创建账户</button>
+      </div>
+    </form>
+    <p class="auth-switch">已有账户？<a href="{{ url_for('login') }}">返回登录</a></p>
+  </div>
 </div>
 {% endblock %}

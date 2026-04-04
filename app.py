@@ -101,8 +101,10 @@ def inject_back_nav():
     va = request.view_args or {}
     gid = va.get("gid")
 
-    if ep == "login":
+    if ep == "index":
         return {"back_nav": None}
+    if ep == "login":
+        return {"back_nav": {"url": url_for("index"), "label": "首页"}}
     if ep == "register":
         return {"back_nav": {"url": url_for("login"), "label": "登录"}}
     if ep == "dashboard":
@@ -128,7 +130,7 @@ def inject_leave_modal_options():
     from flask import request
 
     ep = request.endpoint
-    return {"leave_modal_show_save": ep != "register"}
+    return {"leave_modal_show_save": ep not in ("register", "login")}
 
 
 @login_manager.user_loader
@@ -408,7 +410,7 @@ def accessible_genealogy_ids(user_id: int) -> list[int]:
 def index():
     if current_user.is_authenticated:
         return redirect(url_for("dashboard"))
-    return redirect(url_for("login"))
+    return render_template("landing.html")
 
 
 @app.route("/register", methods=["GET", "POST"])

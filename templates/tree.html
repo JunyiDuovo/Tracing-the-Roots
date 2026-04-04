@@ -1,23 +1,38 @@
 {% extends "base.html" %}
-{% block title %}树形预览{% endblock %}
+{% block title %}树形预览 — 寻根溯源{% endblock %}
 {% block body %}
-<h1>树形预览 <small style="font-weight:400">族谱 #{{ gid }}</small></h1>
-<div class="card">
-  <p>从无双亲的节点开始，或指定根成员 member_id：</p>
-  <form method="get" data-track-dirty="1">
-    <input name="root" placeholder="根成员 member_id" value="{{ request.args.get('root','') }}">
-    <button class="btn" type="submit">刷新</button>
-  </form>
-  {% if root %}
-  <p>当前根：<strong>{{ root.name }}</strong> (member_id {{ root.member_id }})</p>
-  {% endif %}
-</div>
-<div class="card">
-  {% if lines %}
-  <div class="tree-line">{% for depth, name, mid in lines %}{{ '  ' * depth }}├─ {{ name }} ({{ mid }})
+<div class="page-inner">
+  <header class="page-header">
+    <h1 class="page-title">树形预览</h1>
+    <p class="page-kicker">族谱 <span class="kbd">#{{ gid }}</span></p>
+  </header>
+
+  <section class="card card--elevated">
+    <h2 class="form-section-title">选择根节点</h2>
+    <p class="muted">从无双亲的节点开始展示，或指定根成员 <code class="inline-code">member_id</code> 后刷新。</p>
+    <form method="get" data-track-dirty="1" class="form-stack form-stack--search">
+      <div class="field field--grow">
+        <label for="tree-root">根成员 member_id（可选）</label>
+        <input id="tree-root" name="root" placeholder="留空则从谱内无双亲节点起" value="{{ request.args.get('root','') }}">
+      </div>
+      <div class="field field--btn">
+        <label class="label-spacer">&nbsp;</label>
+        <button class="btn" type="submit">刷新</button>
+      </div>
+    </form>
+    {% if root %}
+    <p class="tree-root-line">当前根：<strong>{{ root.name }}</strong> <span class="muted">(member_id {{ root.member_id }})</span></p>
+    {% endif %}
+  </section>
+
+  <section class="card card--elevated card--tree">
+    {% if lines %}
+    <h2 class="form-section-title">谱系树（文本）</h2>
+    <div class="tree-line">{% for depth, name, mid in lines %}{{ '  ' * depth }}├─ {{ name }} ({{ mid }})
 {% endfor %}</div>
-  {% else %}
-  <p>暂无成员数据。</p>
-  {% endif %}
+    {% else %}
+    <p class="empty-hint">暂无成员数据。</p>
+    {% endif %}
+  </section>
 </div>
 {% endblock %}

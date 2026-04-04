@@ -1,48 +1,80 @@
 {% extends "base.html" %}
 {% block title %}总览 — 寻根溯源{% endblock %}
 {% block body %}
-<h1>总览</h1>
-<div class="card">
-  <div class="stats">
-    <div class="stat"><strong>{{ total }}</strong>家族总人数（可访问族谱合计）</div>
-    <div class="stat"><strong>{{ male }}</strong>男性</div>
-    <div class="stat"><strong>{{ female }}</strong>女性</div>
-    {% if total > 0 %}
-    <div class="stat stat-ratios">
-      <div class="stat-ratio-pair">
-        <strong>{{ male_pct }}%</strong>
-        <span class="stat-ratio-label">男性占比</span>
+<div class="page-inner">
+  <header class="page-header">
+    <h1 class="page-title">总览</h1>
+    <p class="page-lead">可访问族谱的人口统计与快捷入口</p>
+  </header>
+
+  <section class="card card--elevated metric-section" aria-label="人口统计">
+    <div class="metric-grid{% if total > 0 %} metric-grid--5{% else %} metric-grid--3{% endif %}">
+      <div class="metric">
+        <span class="metric-value">{{ total }}</span>
+        <span class="metric-label">家族总人数</span>
+        <span class="metric-hint">可访问族谱合计</span>
       </div>
-      <div class="stat-ratio-pair">
-        <strong>{{ female_pct }}%</strong>
-        <span class="stat-ratio-label">女性占比</span>
+      <div class="metric">
+        <span class="metric-value">{{ male }}</span>
+        <span class="metric-label">男性</span>
       </div>
+      <div class="metric">
+        <span class="metric-value">{{ female }}</span>
+        <span class="metric-label">女性</span>
+      </div>
+      {% if total > 0 %}
+      <div class="metric">
+        <span class="metric-value">{{ male_pct }}%</span>
+        <span class="metric-label">男性占比</span>
+      </div>
+      <div class="metric">
+        <span class="metric-value">{{ female_pct }}%</span>
+        <span class="metric-label">女性占比</span>
+      </div>
+      {% endif %}
     </div>
+  </section>
+
+  <section class="card card--elevated">
+    <div class="section-head">
+      <div class="section-head-text">
+        <h2 class="section-title">我的族谱</h2>
+        <p class="section-meta">共 <strong>{{ genealogies|length }}</strong> 部族谱</p>
+      </div>
+      <a class="btn btn--sm" href="{{ url_for('genealogy_new') }}">新建族谱</a>
+    </div>
+    {% if genealogies %}
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th class="th-num">序号</th>
+            <th>谱名</th>
+            <th>姓氏</th>
+            <th class="th-actions">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for g in genealogies %}
+          <tr>
+            <td class="td-num">{{ loop.index }}</td>
+            <td><strong>{{ g.title }}</strong></td>
+            <td>{{ g.surname }}</td>
+            <td class="td-actions">
+              <a href="{{ url_for('genealogy_edit', gid=g.id) }}">编辑</a>
+              <span class="td-sep">·</span>
+              <a href="{{ url_for('members_list', gid=g.id) }}">成员</a>
+              <span class="td-sep">·</span>
+              <a href="{{ url_for('tree_preview', gid=g.id) }}">树形</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="empty-hint">暂无族谱，<a href="{{ url_for('genealogy_new') }}">创建第一个族谱</a> 开始编修。</p>
     {% endif %}
-  </div>
-</div>
-<div class="card">
-  <h2>我的族谱</h2>
-  {% if genealogies %}
-  <table>
-    <thead><tr><th>谱名</th><th>姓氏</th><th>操作</th></tr></thead>
-    <tbody>
-      {% for g in genealogies %}
-      <tr>
-        <td>{{ g.title }}</td>
-        <td>{{ g.surname }}</td>
-        <td>
-          <a href="{{ url_for('genealogy_edit', gid=g.id) }}">编辑</a> ·
-          <a href="{{ url_for('members_list', gid=g.id) }}">成员</a> ·
-          <a href="{{ url_for('tree_preview', gid=g.id) }}">树形</a>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-  <p>暂无族谱，<a href="{{ url_for('genealogy_new') }}">创建第一个族谱</a>。</p>
-  {% endif %}
-  <p><a class="btn" href="{{ url_for('genealogy_new') }}">新建族谱</a></p>
+  </section>
 </div>
 {% endblock %}

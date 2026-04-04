@@ -1,36 +1,60 @@
 {% extends "base.html" %}
-{% block title %}祖先树{% endblock %}
+{% block title %}祖先查询 — 寻根溯源{% endblock %}
 {% block body %}
-<h1>人物祖先查询 <small style="font-weight:400">族谱 #{{ gid }}</small></h1>
-<div class="card">
-  <form method="get" data-track-dirty="1">
-    <label>成员 member_id</label>
-    <input name="id" value="{{ mid or '' }}" required>
-    <button class="btn" type="submit">追溯祖先</button>
-  </form>
-</div>
-{% if mid and rows %}
-<div class="card">
-  <p>按代数（hop）列出父辈以上血亲：</p>
-  <table>
-    <thead><tr><th>hop</th><th>member_id</th><th>name</th><th>gender</th><th>birth_year</th></tr></thead>
-    <tbody>
-      {% for r in rows %}
-      <tr>
-        <td>{{ r.hop }}</td>
-        <td>{{ r.member_id }}</td>
-        <td>{{ r.name }}</td>
-        <td>{{ r.gender }}</td>
-        <td>{{ r.birth_year or '' }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  <h3>缩进示意</h3>
-  <div class="tree-line">{% for r in rows|reverse %}{{ '  ' * (r.hop - 1) }}↑ {{ r.name }} ({{ r.member_id }})
+<div class="page-inner">
+  <header class="page-header">
+    <h1 class="page-title">人物祖先查询</h1>
+    <p class="page-kicker">族谱 <span class="kbd">#{{ gid }}</span></p>
+  </header>
+
+  <section class="card card--elevated">
+    <h2 class="form-section-title">查询成员</h2>
+    <form method="get" data-track-dirty="1" class="form-stack form-stack--search">
+      <div class="field field--grow">
+        <label for="anc-id">成员 member_id</label>
+        <input id="anc-id" name="id" value="{{ mid or '' }}" required placeholder="输入要追溯的成员编号">
+      </div>
+      <div class="field field--btn">
+        <label class="label-spacer">&nbsp;</label>
+        <button class="btn" type="submit">追溯祖先</button>
+      </div>
+    </form>
+  </section>
+
+  {% if mid and rows %}
+  <section class="card card--elevated">
+    <h2 class="form-section-title">父辈以上血亲（按 hop）</h2>
+    <p class="muted">按代数（hop）列出父辈以上血亲。</p>
+    <div class="table-wrap">
+      <table class="data-table data-table--dense">
+        <thead>
+          <tr>
+            <th>hop</th>
+            <th>member_id</th>
+            <th>name</th>
+            <th>gender</th>
+            <th>birth_year</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td>{{ r.hop }}</td>
+            <td class="td-mono">{{ r.member_id }}</td>
+            <td><strong>{{ r.name }}</strong></td>
+            <td>{{ r.gender }}</td>
+            <td>{{ r.birth_year or '' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <h3 class="subsection-title">缩进示意</h3>
+    <div class="tree-line tree-line--compact">{% for r in rows|reverse %}{{ '  ' * (r.hop - 1) }}↑ {{ r.name }} ({{ r.member_id }})
 {% endfor %}</div>
+  </section>
+  {% elif mid %}
+  <section class="card card--elevated"><p class="empty-hint">未找到祖先或成员不存在。</p></section>
+  {% endif %}
 </div>
-{% elif mid %}
-<div class="card"><p>未找到祖先或成员不存在。</p></div>
-{% endif %}
 {% endblock %}

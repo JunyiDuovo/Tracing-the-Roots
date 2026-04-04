@@ -1,24 +1,45 @@
 {% extends "base.html" %}
-{% block title %}族谱列表{% endblock %}
+{% block title %}族谱列表 — 寻根溯源{% endblock %}
 {% block body %}
-<h1>族谱</h1>
-<p><a class="btn" href="{{ url_for('genealogy_new') }}">新建族谱</a></p>
-<div class="card">
-  <table>
-    <thead><tr><th>ID</th><th>谱名</th><th>姓氏</th><th></th></tr></thead>
-    <tbody>
-      {% for g in rows %}
-      <tr>
-        <td>{{ g.id }}</td>
-        <td>{{ g.title }}</td>
-        <td>{{ g.surname }}</td>
-        <td>
-          <a href="{{ url_for('members_list', gid=g.id) }}">成员</a> ·
-          <a href="{{ url_for('tree_preview', gid=g.id) }}">树</a>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<div class="page-inner">
+  <header class="page-header page-header--row">
+    <div>
+      <h1 class="page-title">族谱</h1>
+      <p class="page-lead">管理您有权访问的全部族谱</p>
+    </div>
+    <a class="btn" href="{{ url_for('genealogy_new') }}">新建族谱</a>
+  </header>
+
+  <section class="card card--elevated">
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>谱名</th>
+            <th>姓氏</th>
+            <th class="th-actions">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for g in rows %}
+          <tr>
+            <td class="td-mono">{{ g.id }}</td>
+            <td><strong>{{ g.title }}</strong></td>
+            <td>{{ g.surname }}</td>
+            <td class="td-actions">
+              <a href="{{ url_for('members_list', gid=g.id) }}">成员</a>
+              <span class="td-sep">·</span>
+              <a href="{{ url_for('tree_preview', gid=g.id) }}">树形</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if not rows %}
+    <p class="empty-hint">暂无族谱，点击「新建族谱」开始。</p>
+    {% endif %}
+  </section>
 </div>
 {% endblock %}

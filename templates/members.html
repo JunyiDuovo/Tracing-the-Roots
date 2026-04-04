@@ -1,49 +1,71 @@
 {% extends "base.html" %}
-{% block title %}成员{% endblock %}
+{% block title %}成员 — 寻根溯源{% endblock %}
 {% block body %}
-<h1>成员 <small style="font-weight:400;color:#666">族谱 #{{ gid }}</small></h1>
-<p>
-  <a class="btn" href="{{ url_for('member_new', gid=gid) }}">新增成员</a>
-  <a class="btn secondary" href="{{ url_for('tree_preview', gid=gid) }}">树形预览</a>
-  <a class="btn secondary" href="{{ url_for('ancestors_view', gid=gid) }}">祖先查询</a>
-  <a class="btn secondary" href="{{ url_for('kinship', gid=gid) }}">亲缘通路</a>
-</p>
-<div class="card">
-  <form method="get" action="{{ url_for('members_list', gid=gid) }}" data-track-dirty="1">
-    <label>人名模糊查找</label>
-    <input name="q" value="{{ q or '' }}" placeholder="支持部分匹配">
-    <button class="btn" type="submit">搜索</button>
-  </form>
-</div>
-<div class="card">
-  <table>
-    <thead>
-      <tr>
-        <th>成员编号 <span class="th-en">member_id</span></th>
-        <th>姓名 <span class="th-en">name</span></th>
-        <th>性别 <span class="th-en">gender</span></th>
-        <th>出生年 <span class="th-en">birth_year</span></th>
-        <th>去世年 <span class="th-en">death_year</span></th>
-        <th>辈分 <span class="th-en">generation_level</span></th>
-        <th>配偶编号 <span class="th-en">spouse_id</span></th>
-        <th>操作 <span class="th-en">action</span></th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for m in rows %}
-      <tr>
-        <td>{{ m.member_id }}</td>
-        <td>{{ m.name }}</td>
-        <td>{{ m.gender }}</td>
-        <td>{{ m.birth_year or '' }}</td>
-        <td>{{ m.death_year or '' }}</td>
-        <td>{{ m.generation_level or '' }}</td>
-        <td>{{ m.spouse_id or '' }}</td>
-        <td><a href="{{ url_for('member_edit', gid=gid, mid=m.member_id) }}">编辑</a></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% if rows|length >= 500 %}<p class="muted">仅显示前 500 条，请用搜索缩小范围。</p>{% endif %}
+<div class="page-inner">
+  <header class="page-header page-header--row">
+    <div>
+      <h1 class="page-title">成员</h1>
+      <p class="page-kicker">族谱 <span class="kbd">#{{ gid }}</span></p>
+    </div>
+    <div class="toolbar">
+      <a class="btn" href="{{ url_for('member_new', gid=gid) }}">新增成员</a>
+      <a class="btn secondary" href="{{ url_for('tree_preview', gid=gid) }}">树形预览</a>
+      <a class="btn secondary" href="{{ url_for('ancestors_view', gid=gid) }}">祖先查询</a>
+      <a class="btn secondary" href="{{ url_for('kinship', gid=gid) }}">亲缘通路</a>
+    </div>
+  </header>
+
+  <section class="card card--elevated">
+    <h2 class="form-section-title">人名搜索</h2>
+    <form method="get" action="{{ url_for('members_list', gid=gid) }}" data-track-dirty="1" class="form-stack form-stack--search">
+      <div class="field field--grow">
+        <label for="mq">模糊查找</label>
+        <input id="mq" name="q" value="{{ q or '' }}" placeholder="支持部分匹配">
+      </div>
+      <div class="field field--btn">
+        <label class="label-spacer">&nbsp;</label>
+        <button class="btn" type="submit">搜索</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="card card--elevated">
+    <div class="table-wrap">
+      <table class="data-table data-table--dense">
+        <thead>
+          <tr>
+            <th>成员编号 <span class="th-en">member_id</span></th>
+            <th>姓名 <span class="th-en">name</span></th>
+            <th>性别 <span class="th-en">gender</span></th>
+            <th>出生年 <span class="th-en">birth_year</span></th>
+            <th>去世年 <span class="th-en">death_year</span></th>
+            <th>辈分 <span class="th-en">generation_level</span></th>
+            <th>配偶编号 <span class="th-en">spouse_id</span></th>
+            <th class="th-actions">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in rows %}
+          <tr>
+            <td class="td-mono">{{ m.member_id }}</td>
+            <td><strong>{{ m.name }}</strong></td>
+            <td>{{ m.gender }}</td>
+            <td>{{ m.birth_year or '' }}</td>
+            <td>{{ m.death_year or '' }}</td>
+            <td>{{ m.generation_level or '' }}</td>
+            <td class="td-mono">{{ m.spouse_id or '' }}</td>
+            <td class="td-actions"><a href="{{ url_for('member_edit', gid=gid, mid=m.member_id) }}">编辑</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if rows|length >= 500 %}
+    <p class="empty-hint">仅显示前 500 条，请用搜索缩小范围。</p>
+    {% endif %}
+    {% if not rows %}
+    <p class="empty-hint">暂无成员，请先 <a href="{{ url_for('member_new', gid=gid) }}">新增成员</a>。</p>
+    {% endif %}
+  </section>
 </div>
 {% endblock %}

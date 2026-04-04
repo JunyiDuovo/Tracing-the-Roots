@@ -1,21 +1,37 @@
 {% extends "base.html" %}
-{% block title %}亲缘通路{% endblock %}
+{% block title %}亲缘通路 — 寻根溯源{% endblock %}
 {% block body %}
-<h1>两人亲缘关系 <small style="font-weight:400">族谱 #{{ gid }}</small></h1>
-<div class="card">
-  <p>在血缘（父子/母女）与婚姻关系构成的无向图上做广度优先搜索；若存在通路则列出经过的成员姓名。</p>
-  <form method="post" data-track-dirty="1">
-    <label>成员 A ID</label>
-    <input name="a" value="{{ a or '' }}" required>
-    <label>成员 B ID</label>
-    <input name="b" value="{{ b or '' }}" required>
-    <p><button class="btn" type="submit">查询通路</button></p>
-  </form>
+<div class="page-inner">
+  <header class="page-header">
+    <h1 class="page-title">两人亲缘关系</h1>
+    <p class="page-kicker">族谱 <span class="kbd">#{{ gid }}</span></p>
+  </header>
+
+  <section class="card card--elevated">
+    <h2 class="form-section-title">查询通路</h2>
+    <p class="muted">在血缘（父子/母女）与婚姻关系构成的无向图上做广度优先搜索；若存在通路则列出经过的成员姓名。</p>
+    <form method="post" data-track-dirty="1" class="form-stack">
+      <div class="field-row">
+        <div class="field">
+          <label for="kin-a">成员 A ID</label>
+          <input id="kin-a" name="a" value="{{ a or '' }}" required inputmode="numeric" pattern="[0-9]*" placeholder="member_id">
+        </div>
+        <div class="field">
+          <label for="kin-b">成员 B ID</label>
+          <input id="kin-b" name="b" value="{{ b or '' }}" required inputmode="numeric" pattern="[0-9]*" placeholder="member_id">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn" type="submit">查询通路</button>
+      </div>
+    </form>
+  </section>
+
+  {% if path %}
+  <section class="card card--elevated card--path">
+    <h2 class="form-section-title">通路</h2>
+    <p class="path-chain">{% for n in path %}<span class="path-node">{{ n }}</span>{% if not loop.last %}<span class="path-arrow">→</span>{% endif %}{% endfor %}</p>
+  </section>
+  {% endif %}
 </div>
-{% if path %}
-<div class="card">
-  <h2>通路</h2>
-  <p>→ {{ path | join(' → ') }}</p>
-</div>
-{% endif %}
 {% endblock %}
