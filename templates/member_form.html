@@ -9,9 +9,10 @@
 
   <section class="card card--elevated">
     <form method="post" id="member-form" data-track-dirty="1" class="form-stack">
+      <input type="hidden" name="revision_date_client_today" id="revision_date_client_today" value="">
       <div class="field">
         <label for="member_name">姓名</label>
-        <p class="field-hint">须为 2～4 个汉字（含繁体、生僻字及扩展区汉字），不可含字母、数字或符号。生僻字可能占多个 UTF-16 长度，故不设输入框字数上限，以保存时校验为准。</p>
+        <p class="field-hint">须为 2~4 个汉字（含繁体、生僻字及扩展区汉字），不可含字母、数字或符号。生僻字可能占多个 UTF-16 长度，故不设输入框字数上限，以保存时校验为准。</p>
         <input id="member_name" name="name" type="text" autocomplete="name" inputmode="text" lang="zh-Hans" required
           value="{% if request.method == 'POST' %}{{ request.form.get('name', '') }}{% else %}{{ m.name if m else '' }}{% endif %}">
       </div>
@@ -128,6 +129,22 @@
   syncDateBounds();
 })();
 
+(function () {
+  var form = document.getElementById('member-form');
+  var capEl = document.getElementById('revision_date_client_today');
+  function todayLocalISO() {
+    var d = new Date();
+    var y = d.getFullYear();
+    var m = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+  }
+  if (form && capEl) {
+    form.addEventListener('submit', function () {
+      capEl.value = todayLocalISO();
+    });
+  }
+})();
 (function () {
   var form = document.getElementById('member-form');
   var nameInput = document.getElementById('member_name');

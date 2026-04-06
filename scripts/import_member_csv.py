@@ -6,8 +6,8 @@ CSV 列：member_id, tree_id, name, gender, birth_year, death_year, bio,
 （created_by / created_at 走库默认值：NULL 与 NOW()）
 
 导入前须保证每个 tree_id 在 genealogy 中存在且 id 一致，否则违反外键。
-可先执行 sql/13_genealogy_seed_for_members_csv.sql，或运行：
-  python scripts/ensure_genealogy_for_members_csv.py [members.csv]
+请先运行（会按 CSV 生成 genealogy 的姓氏与「姓名支（树id）」标题）：
+    python scripts/ensure_genealogy_for_members_csv.py [members.csv]
 
 环境变量：GENEALOGY_DSN
 

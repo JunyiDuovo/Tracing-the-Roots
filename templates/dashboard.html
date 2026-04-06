@@ -16,11 +16,11 @@
       </div>
       <div class="metric">
         <span class="metric-value">{{ male }}</span>
-        <span class="metric-label">男性</span>
+        <span class="metric-label">男性人数</span>
       </div>
       <div class="metric">
         <span class="metric-value">{{ female }}</span>
-        <span class="metric-label">女性</span>
+        <span class="metric-label">女性人数</span>
       </div>
       {% if total > 0 %}
       <div class="metric">
@@ -51,6 +51,8 @@
             <th class="th-num">序号</th>
             <th>谱名</th>
             <th>姓氏</th>
+            <th class="th-num">当前人数</th>
+            <th>修谱日期</th>
             <th class="th-actions">操作</th>
           </tr>
         </thead>
@@ -58,8 +60,10 @@
           {% for g in genealogies %}
           <tr>
             <td class="td-num">{{ loop.index }}</td>
-            <td><strong>{{ g.title }}</strong></td>
+            <td><strong>{% if display_titles[g.id] %}{{ display_titles[g.id] }}{% else %}—{% endif %}</strong></td>
             <td>{{ g.surname }}</td>
+            <td class="td-num">{{ member_counts.get(g.id, 0) }}</td>
+            <td>{% if g.revision_date %}{{ g.revision_date.isoformat() }}{% else %}—{% endif %}</td>
             <td class="td-actions">
               <a href="{{ url_for('genealogy_edit', gid=g.id) }}">编辑</a>
               <span class="td-sep">·</span>

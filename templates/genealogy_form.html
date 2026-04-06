@@ -10,9 +10,13 @@
   <section class="card card--elevated">
     <h2 class="form-section-title">基本信息</h2>
     <form method="post" id="genealogy-main-form" data-track-dirty="1" class="form-stack">
+      <input type="hidden" name="revision_date_client_today" id="revision_date_client_today" value="">
       <div class="field">
         <label for="gf-title">谱名</label>
-        <input id="gf-title" name="title" value="{{ g.title if g else '' }}" required>
+        <input id="gf-title" name="title" value="{{ title_for_form if g else '' }}"
+          placeholder="可留空；有男性成员后列表将按首名男性自动生成谱名">
+        <p class="field-hint">有男性成员时，总览/族谱列表会按「首名男性 + 支（树 + 族谱序号）」显示；</p>
+        <p class="field-hint">无成员或仅有女性时，以您在此保存的谱名为准（可为空）。</p>
       </div>
       <div class="field">
         <label for="gf-surname">姓氏</label>
@@ -20,9 +24,16 @@
       </div>
       <div class="field">
         <label for="revision_date">修谱日期</label>
+        {% if g %}
+        <input id="revision_date" type="date" min="0800-01-01" readonly
+          value="{{ g.revision_date.isoformat() if g.revision_date else '' }}"
+          aria-readonly="true">
+        <p class="field-hint">操作成功后，自动更新为当天（与日历一致）；此处仅供查看。</p>
+        {% else %}
         <input id="revision_date" name="revision_date" type="date" min="0800-01-01"
-          value="{{ g.revision_date.isoformat() if g and g.revision_date else '' }}">
-        <p class="field-hint">不可选择今天之后的日期。</p>
+          value="">
+        <p class="field-hint">不可选择今天之后的日期</p>
+        {% endif %}
       </div>
       <div class="form-actions">
         <button class="btn" type="submit">保存</button>
@@ -55,7 +66,8 @@
   <section class="card card--elevated">
     <h2 class="form-section-title">邀请协作者</h2>
     <p class="muted">仅创建者可邀请。被邀请用户登录后即可编辑本族谱成员。</p>
-    <form method="post" action="{{ url_for('genealogy_invite', gid=g.id) }}" data-track-dirty="1" class="form-stack form-stack--inline">
+    <form method="post" action="{{ url_for('genealogy_invite', gid=g.id) }}" id="invite-form" data-track-dirty="1" class="form-stack form-stack--inline">
+      <input type="hidden" name="revision_date_client_today" id="revision_date_client_today_invite" value="">
       <div class="field field--grow">
         <label for="invite-user">对方用户名</label>
         <input id="invite-user" name="username" placeholder="已注册用户名" required>
@@ -74,8 +86,8 @@
 </div>
 <script>
 (function () {
+  var capEl = document.getElementById("revision_date_client_today");
   var el = document.getElementById("revision_date");
-  if (!el) return;
   function todayLocalISO() {
     var d = new Date();
     var y = d.getFullYear();
@@ -85,12 +97,30 @@
   }
   function capRevisionMax() {
     var t = todayLocalISO();
-    el.max = t;
-    if (el.value && el.value > t) el.value = "";
+    if (capEl) capEl.value = t;
+    if (el) {
+      el.max = t;
+      if (el.value && el.value > t) el.value = "";
+    }
   }
   capRevisionMax();
-  el.addEventListener("change", capRevisionMax);
-  el.addEventListener("input", capRevisionMax);
+  if (el) {
+    el.addEventListener("change", capRevisionMax);
+    el.addEventListener("input", capRevisionMax);
+  }
+  var mainForm = document.getElementById("genealogy-main-form");
+  if (mainForm) {
+    mainForm.addEventListener("submit", function () {
+      capRevisionMax();
+    });
+  }
+  var inviteForm = document.getElementById("invite-form");
+  var capInvite = document.getElementById("revision_date_client_today_invite");
+  if (inviteForm && capInvite) {
+    inviteForm.addEventListener("submit", function () {
+      capInvite.value = todayLocalISO();
+    });
+  }
 })();
 (function () {
   var modal = document.getElementById("delete-genealogy-modal");

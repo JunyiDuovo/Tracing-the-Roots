@@ -20,7 +20,7 @@ CREATE TABLE genealogy (
 );
 
 CREATE TABLE genealogy_collaborator (
-    genealogy_id    INTEGER NOT NULL REFERENCES genealogy(id) ON DELETE CASCADE,
+    genealogy_id    INTEGER NOT NULL REFERENCES genealogy(id) ON DELETE CASCADE ON UPDATE CASCADE,
     user_id         INTEGER NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
     invited_by      INTEGER REFERENCES app_user(id),
     joined_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -29,7 +29,7 @@ CREATE TABLE genealogy_collaborator (
 
 CREATE TABLE member (
     member_id         BIGSERIAL PRIMARY KEY,
-    tree_id           INTEGER NOT NULL REFERENCES genealogy(id) ON DELETE CASCADE,
+    tree_id           INTEGER NOT NULL REFERENCES genealogy(id) ON DELETE CASCADE ON UPDATE CASCADE,
     name              VARCHAR(100) NOT NULL,
     gender            VARCHAR(16) NOT NULL,
     birth_year        INTEGER CHECK (birth_year IS NULL OR (birth_year >= 800 AND birth_year <= 3000)),

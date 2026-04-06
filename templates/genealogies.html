@@ -18,6 +18,8 @@
             <th>ID</th>
             <th>谱名</th>
             <th>姓氏</th>
+            <th class="th-num">当前人数</th>
+            <th>修谱日期</th>
             <th class="th-actions">操作</th>
           </tr>
         </thead>
@@ -25,8 +27,10 @@
           {% for g in rows %}
           <tr>
             <td class="td-mono">{{ g.id }}</td>
-            <td><strong>{{ g.title }}</strong></td>
+            <td><strong>{% if display_titles[g.id] %}{{ display_titles[g.id] }}{% else %}—{% endif %}</strong></td>
             <td>{{ g.surname }}</td>
+            <td class="td-num">{{ member_counts.get(g.id, 0) }}</td>
+            <td>{% if g.revision_date %}{{ g.revision_date.isoformat() }}{% else %}—{% endif %}</td>
             <td class="td-actions">
               <a href="{{ url_for('members_list', gid=g.id) }}">成员</a>
               <span class="td-sep">·</span>

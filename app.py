@@ -158,6 +158,45 @@ def _parse_revision_date(raw: str) -> date | None:
         return None
 
 
+# 浏览器提交的「本机今日」若晚于服务器 date.today()（常见于容器/WSL 系统时间未同步），
+# 在若干天内采信客户端，使「不能晚于今天」与 Windows/本机日历一致；非数据库时间。
+_REVISION_DATE_CLIENT_SYNC_MAX_DAYS = 14
+
+
+def _effective_revision_date_cap(client_today_raw: str | None) -> date:
+    server = date.today()
+    if not client_today_raw:
+        return server
+    client = _parse_revision_date(client_today_raw.strip())
+    if client is None:
+        return server
+    if client > server and (client - server).days <= _REVISION_DATE_CLIENT_SYNC_MAX_DAYS:
+        return client
+    return server
+
+
+def _touch_genealogy_revision_date(
+    session: Session, genealogy_id: int, client_today_raw: str | None = None
+) -> None:
+    """族谱有实质变更并保存后，将修谱日期更新为「今日」（与 _effective_revision_date_cap 一致）。"""
+    geo = session.get(Genealogy, genealogy_id)
+    if geo:
+        geo.revision_date = _effective_revision_date_cap(client_today_raw)
+
+
+def _member_counts_by_tree_ids(session: Session, gid_list: list[int]) -> dict[int, int]:
+    """每部族谱内 member 表行数(tree_id = genealogy.id),无成员则为 0。"""
+    if not gid_list:
+        return {}
+    rows = session.execute(
+        select(Member.tree_id, func.count(Member.member_id))
+        .where(Member.tree_id.in_(gid_list))
+        .group_by(Member.tree_id)
+    ).all()
+    counts = {int(gid): int(c) for gid, c in rows}
+    return {gid: counts.get(gid, 0) for gid in gid_list}
+
+
 def _year_from_form_field(raw: str) -> int | None:
     """从 YYYY-MM-DD(date 控件)或纯数字年份解析为整数年份。"""
     s = raw.strip()
@@ -186,7 +225,7 @@ def _iso_date_from_form_prefix(raw: str) -> date | None:
 
 
 def _parse_member_years_from_form() -> tuple[int | None, int | None] | None:
-    """解析 POST 中的出生年、去世年（date 字段名 birth_date / death_date，与 birth_year/death_year 列一致）。"""
+    """解析 POST 中的出生年、去世年(date 字段名 birth_date / death_date,与 birth_year/death_year 列一致)"""
     by = request.form.get("birth_date", "").strip() or request.form.get("birth_year", "").strip()
     dy = request.form.get("death_date", "").strip() or request.form.get("death_year", "").strip()
     bi = _year_from_form_field(by) if by else None
@@ -279,6 +318,107 @@ def _gender_label_cn(g: str) -> str:
     return "未识别或非男非女"
 
 
+def _gender_display_cn(g: str | None) -> str:
+    """列表展示：M/Male/男→男，F/Female/女→女。"""
+    if not g or not str(g).strip():
+        return ""
+    if _is_male_gender(g):
+        return "男"
+    if _is_female_gender(g):
+        return "女"
+    return str(g).strip()
+
+
+@app.template_filter("gender_cn")
+def _gender_cn_filter(g: str | None) -> str:
+    return _gender_display_cn(g)
+
+
+def _format_genealogy_display_title(first_male_name: str | None, tree_id: int) -> str:
+    """谱名：首名男性姓名 + 支（树Y），Y 为 genealogy.id；无男性时用占位。"""
+    if first_male_name and first_male_name.strip():
+        return f"{first_male_name.strip()}支（树{tree_id}）"
+    return f"（无男性成员）支（树{tree_id}）"
+
+
+def _first_male_name_in_tree(session: Session, tree_id: int) -> str | None:
+    """同一 tree_id 下按 member_id 升序的第一名男性成员姓名。"""
+    m = session.scalar(
+        select(Member)
+        .where(Member.tree_id == tree_id)
+        .where(
+            or_(
+                Member.gender == "M",
+                Member.gender == "Male",
+                Member.gender == "男",
+            )
+        )
+        .order_by(Member.member_id)
+        .limit(1)
+    )
+    if not m or not (m.name or "").strip():
+        return None
+    return (m.name or "").strip()
+
+
+def _sync_genealogy_title_from_members(session: Session, tree_id: int) -> None:
+    geo = session.get(Genealogy, tree_id)
+    if not geo:
+        return
+    nm = _first_male_name_in_tree(session, tree_id)
+    geo.title = _format_genealogy_display_title(nm, tree_id)
+
+
+def _sync_all_genealogy_titles_from_members(session: Session) -> None:
+    """族谱 id 重排等批量变更后，为每部族谱刷新 title。"""
+    for tid in session.scalars(select(Genealogy.id).order_by(Genealogy.id)).all():
+        _sync_genealogy_title_from_members(session, tid)
+
+
+def _display_genealogy_list_titles(
+    session: Session, genealogy_rows: list[Genealogy]
+) -> dict[int, str]:
+    """
+    总览/族谱列表：若已有男性成员，则按首名男性（member_id 最小）+ 支（树id）；
+    若无男性成员，则显示用户在库中保存的谱名（可为空，不强制「无男性成员」占位）。
+    """
+    if not genealogy_rows:
+        return {}
+    gids = [g.id for g in genealogy_rows]
+    rows = session.execute(
+        select(Member.tree_id, Member.name)
+        .where(Member.tree_id.in_(gids))
+        .where(
+            or_(
+                Member.gender == "M",
+                Member.gender == "Male",
+                Member.gender == "男",
+            )
+        )
+        .order_by(Member.tree_id, Member.member_id)
+    ).all()
+    first_name_by_tree: dict[int, str] = {}
+    for tree_id, name in rows:
+        if tree_id not in first_name_by_tree:
+            first_name_by_tree[tree_id] = (name or "").strip()
+    out: dict[int, str] = {}
+    for g in genealogy_rows:
+        nm = first_name_by_tree.get(g.id)
+        if nm:
+            out[g.id] = _format_genealogy_display_title(nm, g.id)
+        else:
+            out[g.id] = (g.title or "").strip()
+    return out
+
+
+def _genealogy_form_title_for_edit(session: Session, g: Genealogy) -> str:
+    """编辑页谱名输入框：与总览/族谱列表同一规则（有男性则按首名男性，否则用库内谱名）。"""
+    nm = _first_male_name_in_tree(session, g.id)
+    if nm:
+        return _format_genealogy_display_title(nm, g.id)
+    return (g.title or "").strip()
+
+
 def _sync_member_id_sequence(session: Session) -> None:
     """将 member_id 序列对齐到当前 MAX(member_id)，使删空后新成员可从 1 起号。"""
     max_id = session.scalar(select(func.max(Member.member_id)))
@@ -295,6 +435,61 @@ def _sync_member_id_sequence(session: Session) -> None:
             ),
             {"m": max_id},
         )
+
+
+def _sync_genealogy_id_sequence(session: Session) -> None:
+    """将 genealogy.id 序列对齐到 MAX(id)，避免手动指定 id 后 SERIAL 与后续 INSERT 冲突。"""
+    max_id = session.scalar(select(func.max(Genealogy.id)))
+    if max_id is None:
+        session.execute(
+            text(
+                "SELECT setval(pg_get_serial_sequence('genealogy', 'id')::regclass, 1, false)"
+            )
+        )
+    else:
+        session.execute(
+            text(
+                "SELECT setval(pg_get_serial_sequence('genealogy', 'id')::regclass, :m, true)"
+            ),
+            {"m": max_id},
+        )
+
+
+def _next_genealogy_id(session: Session) -> int:
+    """删除后经 _compact_genealogy_ids 为 1..n，新 id 为 max+1（表空则为 1）。"""
+    if session.bind.dialect.name == "postgresql":
+        session.execute(text("SELECT pg_advisory_xact_lock(428371)"))
+    max_id = session.scalar(select(func.max(Genealogy.id)))
+    return (max_id or 0) + 1
+
+
+def _compact_genealogy_ids(session: Session) -> None:
+    """
+    将 genealogy.id 按当前升序重排为 1..n，无空号、无重复。
+    依赖 member.tree_id、genealogy_collaborator.genealogy_id 的 ON UPDATE CASCADE
+    （见 sql/16_genealogy_fk_on_update_cascade.sql 或 01_schema 中对应外键）。
+    """
+    ids = session.scalars(select(Genealogy.id).order_by(Genealogy.id)).all()
+    if not ids:
+        return
+    sorted_old = list(ids)
+    mapping = {old: i + 1 for i, old in enumerate(sorted_old)}
+    if all(mapping[o] == o for o in sorted_old):
+        return
+    off = max(sorted_old) + 1
+    for old_id in sorted(mapping.keys(), reverse=True):
+        session.execute(
+            update(Genealogy).where(Genealogy.id == old_id).values(id=old_id + off)
+        )
+        session.flush()
+    for old_id in sorted(mapping.keys()):
+        new_id = mapping[old_id]
+        temp = old_id + off
+        session.execute(
+            update(Genealogy).where(Genealogy.id == temp).values(id=new_id)
+        )
+        session.flush()
+    session.expire_all()
 
 
 def _compact_member_ids_in_tree(session: Session, tree_id: int) -> None:
@@ -484,6 +679,8 @@ def dashboard():
             male_pct="0.00",
             female_pct="0.00",
             genealogies=[],
+            member_counts={},
+            display_titles={},
         )
     with Session(engine) as s:
         total = s.scalar(
@@ -508,6 +705,8 @@ def dashboard():
         gens = s.scalars(
             select(Genealogy).where(Genealogy.id.in_(gids)).order_by(Genealogy.id)
         ).all()
+        member_counts = _member_counts_by_tree_ids(s, gids)
+        display_titles = _display_genealogy_list_titles(s, gens)
     t = total or 0
     m = male or 0
     f = female or 0
@@ -519,6 +718,8 @@ def dashboard():
         male_pct=_pct_two_decimals(m, t),
         female_pct=_pct_two_decimals(f, t),
         genealogies=gens,
+        member_counts=member_counts,
+        display_titles=display_titles,
     )
 
 
@@ -530,7 +731,14 @@ def genealogies():
         rows = s.scalars(
             select(Genealogy).where(Genealogy.id.in_(gids)).order_by(Genealogy.id)
         ).all()
-    return render_template("genealogies.html", rows=rows)
+        member_counts = _member_counts_by_tree_ids(s, gids)
+        display_titles = _display_genealogy_list_titles(s, rows)
+    return render_template(
+        "genealogies.html",
+        rows=rows,
+        member_counts=member_counts,
+        display_titles=display_titles,
+    )
 
 
 @app.route("/genealogy/new", methods=["GET", "POST"])
@@ -541,28 +749,34 @@ def genealogy_new():
         surname = request.form.get("surname", "").strip()
         rd = request.form.get("revision_date", "").strip()
         rev = _parse_revision_date(rd) if rd else None
+        cap = _effective_revision_date_cap(request.form.get("revision_date_client_today"))
         if rd and rev is None:
             flash("修谱日期格式须为 YYYY-MM-DD")
             return render_template("genealogy_form.html", g=None)
-        if rev is not None and rev > date.today():
-            flash("修谱日期不能晚于今天")
+        if rev is not None and rev > cap:
+            flash("修谱日期不能晚于今天（以本机或服务器日历为准）")
             return render_template("genealogy_form.html", g=None)
-        if not title or not surname:
-            flash("谱名与姓氏必填")
+        if not surname:
+            flash("姓氏必填")
             return render_template("genealogy_form.html", g=None)
-        if len(title) > _GENEALOGY_TITLE_MAX or len(surname) > _GENEALOGY_SURNAME_MAX:
-            flash(
-                f"谱名最多 {_GENEALOGY_TITLE_MAX} 字、姓氏最多 {_GENEALOGY_SURNAME_MAX} 字，请缩短后重试"
-            )
+        if len(surname) > _GENEALOGY_SURNAME_MAX:
+            flash(f"姓氏最多 {_GENEALOGY_SURNAME_MAX} 字，请缩短后重试")
             return render_template("genealogy_form.html", g=None)
         with Session(engine) as s:
+            nid = _next_genealogy_id(s)
+            if len(title) > _GENEALOGY_TITLE_MAX:
+                flash(f"谱名最多 {_GENEALOGY_TITLE_MAX} 字，请缩短后重试")
+                return render_template("genealogy_form.html", g=None)
             g = Genealogy(
+                id=nid,
                 title=title,
                 surname=surname,
                 revision_date=rev,
                 created_by=current_user.id,
             )
             s.add(g)
+            s.flush()
+            _sync_genealogy_id_sequence(s)
             s.commit()
             flash("已创建族谱")
             return redirect(url_for("genealogy_edit", gid=g.id))
@@ -587,6 +801,9 @@ def genealogy_delete(gid: int):
             s.delete(g)
             s.flush()
             _sync_member_id_sequence(s)
+            _compact_genealogy_ids(s)
+            _sync_all_genealogy_titles_from_members(s)
+            _sync_genealogy_id_sequence(s)
             s.commit()
         except SQLAlchemyError as e:
             s.rollback()
@@ -608,15 +825,7 @@ def genealogy_edit(gid: int):
             flash("族谱不存在")
             return redirect(url_for("genealogies"))
         if request.method == "POST":
-            rd = request.form.get("revision_date", "").strip()
-            rev = _parse_revision_date(rd) if rd else None
-            if rd and rev is None:
-                flash("修谱日期格式须为 YYYY-MM-DD")
-                return redirect(url_for("genealogy_edit", gid=gid))
-            if rev is not None and rev > date.today():
-                flash("修谱日期不能晚于今天")
-                return redirect(url_for("genealogy_edit", gid=gid))
-            t = request.form.get("title", "").strip() or g.title
+            t = request.form.get("title", "").strip()
             su = request.form.get("surname", "").strip() or g.surname
             if len(t) > _GENEALOGY_TITLE_MAX or len(su) > _GENEALOGY_SURNAME_MAX:
                 flash(
@@ -625,7 +834,9 @@ def genealogy_edit(gid: int):
                 return redirect(url_for("genealogy_edit", gid=gid))
             g.title = t
             g.surname = su
-            g.revision_date = rev
+            _touch_genealogy_revision_date(
+                s, gid, request.form.get("revision_date_client_today")
+            )
             s.commit()
             flash("已保存")
             return redirect(url_for("genealogy_edit", gid=gid))
@@ -638,8 +849,13 @@ def genealogy_edit(gid: int):
             .where(GenealogyCollaborator.genealogy_id == gid)
         ).all()
         is_creator = g.created_by == current_user.id
+        title_for_form = _genealogy_form_title_for_edit(s, g)
     return render_template(
-        "genealogy_form.html", g=g, collabs=collabs, is_creator=is_creator
+        "genealogy_form.html",
+        g=g,
+        title_for_form=title_for_form,
+        collabs=collabs,
+        is_creator=is_creator,
     )
 
 
@@ -679,6 +895,9 @@ def genealogy_invite(gid: int):
                 genealogy_id=gid, user_id=u.id, invited_by=current_user.id
             )
         )
+        _touch_genealogy_revision_date(
+            s, gid, request.form.get("revision_date_client_today")
+        )
         s.commit()
         flash("已添加协作者")
     return redirect(url_for("genealogy_edit", gid=gid))
@@ -693,12 +912,18 @@ def members_list(gid: int):
     q = request.args.get("q", "").strip()
     try:
         with Session(engine) as s:
+            ordered_ids = s.scalars(
+                select(Member.member_id)
+                .where(Member.tree_id == gid)
+                .order_by(Member.member_id)
+            ).all()
+            rank_map = {mid: i + 1 for i, mid in enumerate(ordered_ids)}
             stmt = select(Member).where(Member.tree_id == gid)
             if q:
                 stmt = stmt.where(
                     Member.name.ilike(f"%{_escape_like_pattern(q)}%", escape="\\")
                 )
-            stmt = stmt.order_by(Member.member_id).limit(500)
+            stmt = stmt.order_by(Member.member_id)
             rows = s.scalars(stmt).all()
     except SQLAlchemyError:
         current_app.logger.exception("members_list query failed (schema mismatch?)")
@@ -707,7 +932,9 @@ def members_list(gid: int):
             "请清空后执行 sql/01_schema.sql 与 sql/02_indexes.sql（列须与 members.csv 表头一致）。"
         )
         return redirect(url_for("genealogy_edit", gid=gid))
-    return render_template("members.html", gid=gid, rows=rows, q=q)
+    return render_template(
+        "members.html", gid=gid, rows=rows, q=q, rank_map=rank_map
+    )
 
 
 @app.route("/genealogy/<int:gid>/member/new", methods=["GET", "POST"])
@@ -767,6 +994,9 @@ def member_new(gid: int):
             )
             try:
                 s.add(m)
+                _touch_genealogy_revision_date(
+                    s, gid, request.form.get("revision_date_client_today")
+                )
                 s.commit()
             except SQLAlchemyError as e:
                 s.rollback()
@@ -796,6 +1026,9 @@ def member_edit(gid: int, mid: int):
                 try:
                     _compact_member_ids_in_tree(s, tid)
                     _sync_member_id_sequence(s)
+                    _touch_genealogy_revision_date(
+                        s, tid, request.form.get("revision_date_client_today")
+                    )
                     s.commit()
                 except SQLAlchemyError as e:
                     s.rollback()
@@ -846,6 +1079,9 @@ def member_edit(gid: int, mid: int):
             else:
                 m.generation_level = None
             try:
+                _touch_genealogy_revision_date(
+                    s, gid, request.form.get("revision_date_client_today")
+                )
                 s.commit()
             except SQLAlchemyError as e:
                 s.rollback()

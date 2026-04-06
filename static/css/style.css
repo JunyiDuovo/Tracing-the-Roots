@@ -791,6 +791,21 @@ body.page-app nav a:hover {
   padding: 0.45rem 0.5rem;
   font-size: 0.88rem;
 }
+/* 成员列表表头：仅中文标签，单元格内居中 */
+.data-table.members-table thead th {
+  text-align: center;
+  vertical-align: middle;
+}
+.data-table.members-table thead th.th-actions {
+  text-align: center;
+}
+.data-table.members-table tbody td {
+  text-align: center;
+  vertical-align: middle;
+}
+.data-table.members-table tbody td.td-actions {
+  text-align: center;
+}
 .data-table a {
   color: var(--accent);
   font-weight: 500;
