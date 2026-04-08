@@ -4,6 +4,48 @@
 {% block header_class %}top--landing{% endblock %}
 {% block main_class %}main-full{% endblock %}
 {% block body %}
+<section class="landing-discover" aria-labelledby="landing-discover-title">
+  <div class="landing-discover-glow" aria-hidden="true"></div>
+  <h2 id="landing-discover-title" class="visually-hidden">谱海导航与姓氏文化外链</h2>
+  <div class="landing-discover-inner">
+    <span class="landing-discover-tag">族谱平台</span>
+    <nav class="landing-discover-nav" aria-label="外部族谱与家谱网站">
+      <a class="landing-chip" href="https://www.familysearch.org/zh-Hant/chinese/" target="_blank" rel="noopener noreferrer">
+        FamilySearch 家谱树 <span class="landing-chip-ext" aria-hidden="true">↗</span>
+      </a>
+      <a class="landing-chip" href="https://www.zhonghuapu.com/" target="_blank" rel="noopener noreferrer">
+        华谱网 <span class="landing-chip-ext" aria-hidden="true">↗</span>
+      </a>
+      <a class="landing-chip" href="https://myfamilybook.cn/" target="_blank" rel="noopener noreferrer">
+        大谱师 <span class="landing-chip-ext" aria-hidden="true">↗</span>
+      </a>
+      <a class="landing-chip" href="https://www.zupu.cn/zp/" target="_blank" rel="noopener noreferrer">
+        族谱网 <span class="landing-chip-ext" aria-hidden="true">↗</span>
+      </a>
+    </nav>
+  </div>
+  <div class="landing-discover-inner landing-discover-inner--sub">
+    <span class="landing-discover-tag landing-discover-tag--muted">姓氏文化</span>
+    <nav class="landing-discover-nav" aria-label="百家姓与姓氏源流">
+      <a class="landing-chip landing-chip--soft" href="https://baike.baidu.com/item/%E5%A7%93%E6%B0%8F" target="_blank" rel="noopener noreferrer">
+        百科 · 姓氏 <span class="landing-chip-ext" aria-hidden="true">↗</span>
+      </a>
+      <a class="landing-chip landing-chip--soft" href="https://baike.baidu.com/item/%E7%99%BE%E5%AE%B6%E5%A7%93" target="_blank" rel="noopener noreferrer">
+        百科 · 百家姓 <span class="landing-chip-ext" aria-hidden="true">↗</span>
+      </a>
+      <a class="landing-chip landing-chip--soft" href="https://www.zdic.net/" target="_blank" rel="noopener noreferrer">
+        汉典 · 汉字与源流 <span class="landing-chip-ext" aria-hidden="true">↗</span>
+      </a>
+      <a class="landing-chip landing-chip--soft" href="https://zh.wikipedia.org/wiki/%E4%B8%AD%E5%9B%BD%E5%A7%93%E6%B0%8F" target="_blank" rel="noopener noreferrer">
+        维基 · 中国姓氏 <span class="landing-chip-ext" aria-hidden="true">↗</span>
+      </a>
+      <a class="landing-chip landing-chip--soft" href="https://zh.wikipedia.org/wiki/%E7%99%BE%E5%AE%B6%E5%A7%93" target="_blank" rel="noopener noreferrer">
+        维基 · 百家姓 <span class="landing-chip-ext" aria-hidden="true">↗</span>
+      </a>
+    </nav>
+  </div>
+</section>
+
 <section class="landing-hero" aria-labelledby="landing-title">
   <div class="landing-hero-bg" aria-hidden="true"></div>
   <div class="landing-hero-content">
@@ -20,21 +62,60 @@
   </div>
 </section>
 
-<section class="landing-features" aria-label="功能特点">
-  <div class="landing-features-inner">
+<section class="landing-resources" aria-labelledby="landing-resources-title">
+  <div class="landing-resources-head">
+    <h2 id="landing-resources-title" class="landing-resources-title">延伸阅读</h2>
+    <p class="landing-resources-sub">从全球家谱库到姓氏典籍，一键跳转，方便您编谱时对照与溯源。</p>
+  </div>
+  <div class="landing-cards-grid">
+    <article class="landing-card">
+      <div class="landing-card-icon" aria-hidden="true">世</div>
+      <h3 class="landing-card-title">全球家谱与档案</h3>
+      <p class="landing-card-text">FamilySearch 提供海量家谱树与历史档案检索，适合查找海外支系与教会记录。</p>
+      <div class="landing-card-foot">
+        <a class="landing-card-link" href="https://www.familysearch.org/zh-Hant/chinese/" target="_blank" rel="noopener noreferrer">进入 FamilySearch ↗</a>
+      </div>
+    </article>
     <article class="landing-card">
       <div class="landing-card-icon" aria-hidden="true">谱</div>
-      <h2 class="landing-card-title">编修族谱</h2>
+      <h3 class="landing-card-title">国内编谱与数字化</h3>
+      <p class="landing-card-text">华谱网、大谱师、族谱网等平台侧重中文谱牒、印刷与在线协作，可作版式与流程参考。</p>
+      <div class="landing-card-foot">
+        <a href="https://www.zhonghuapu.com/" target="_blank" rel="noopener noreferrer">华谱网</a>
+        <span class="landing-card-foot-sep">·</span>
+        <a href="https://myfamilybook.cn/" target="_blank" rel="noopener noreferrer">大谱师</a>
+        <span class="landing-card-foot-sep">·</span>
+        <a href="https://www.zupu.cn/zp/" target="_blank" rel="noopener noreferrer">族谱网</a>
+      </div>
+    </article>
+    <article class="landing-card">
+      <div class="landing-card-icon" aria-hidden="true">字</div>
+      <h3 class="landing-card-title">百家姓与姓氏源流</h3>
+      <p class="landing-card-text">查阅《百家姓》次序、常见姓氏来历，或用汉典核对用字本义与异体。</p>
+      <div class="landing-card-foot">
+        <a href="https://baike.baidu.com/item/%E7%99%BE%E5%AE%B6%E5%A7%93" target="_blank" rel="noopener noreferrer">百科 · 百家姓</a>
+        <span class="landing-card-foot-sep">·</span>
+        <a href="https://www.zdic.net/" target="_blank" rel="noopener noreferrer">汉典</a>
+      </div>
+    </article>
+  </div>
+</section>
+
+<section class="landing-features" aria-label="功能特点">
+  <div class="landing-cards-grid">
+    <article class="landing-card">
+      <div class="landing-card-icon" aria-hidden="true">谱</div>
+      <h3 class="landing-card-title">编修族谱</h3>
       <p class="landing-card-text">建立谱籍、录入辈分与支系，把家族结构整理得清清楚楚。</p>
     </article>
     <article class="landing-card">
       <div class="landing-card-icon" aria-hidden="true">系</div>
-      <h2 class="landing-card-title">梳理关系</h2>
+      <h3 class="landing-card-title">梳理关系</h3>
       <p class="landing-card-text">父母、配偶与血缘脉络可追溯，树形与祖先查询一目了然。</p>
     </article>
     <article class="landing-card">
       <div class="landing-card-icon" aria-hidden="true">承</div>
-      <h2 class="landing-card-title">协作传承</h2>
+      <h3 class="landing-card-title">协作传承</h3>
       <p class="landing-card-text">邀请家人共同维护，修谱成果由至亲共同守护与延续。</p>
     </article>
   </div>

@@ -236,6 +236,214 @@ label { display: block; margin: 0.5rem 0 0.2rem; color: var(--muted); font-size:
   font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", Georgia, "Times New Roman", serif;
   letter-spacing: 0.06em;
 }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 首页顶部：谱海导航条（与下方首屏色带衔接） */
+.landing-discover {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  border-bottom: none;
+  background: linear-gradient(
+    180deg,
+    #fcfbf8 0%,
+    #f5f1ea 55%,
+    #f0ebe4 100%
+  );
+  box-shadow: 0 8px 28px rgba(44, 36, 28, 0.05);
+}
+.landing-discover-glow {
+  position: absolute;
+  inset: -40% -20% auto;
+  height: 120%;
+  background:
+    radial-gradient(ellipse 90% 60% at 20% 0%, rgba(184, 149, 108, 0.35), transparent 55%),
+    radial-gradient(ellipse 70% 50% at 85% 20%, rgba(139, 154, 126, 0.22), transparent 50%);
+  animation: landing-discover-shimmer 14s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+@keyframes landing-discover-shimmer {
+  0% { opacity: 0.65; transform: translateX(0) scale(1); }
+  100% { opacity: 1; transform: translateX(2%) scale(1.03); }
+}
+.landing-discover-inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 1rem;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0.7rem 1.25rem 0.35rem;
+}
+.landing-discover-inner--sub {
+  padding-top: 0.15rem;
+  padding-bottom: 0.75rem;
+  border-top: 1px dashed rgba(44, 36, 28, 0.12);
+}
+.landing-discover-tag {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent-dark);
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  background: linear-gradient(145deg, rgba(184, 149, 108, 0.35), rgba(107, 78, 61, 0.12));
+  border: 1px solid rgba(107, 78, 61, 0.15);
+}
+.landing-discover-tag--muted {
+  color: #5a5046;
+  background: linear-gradient(145deg, rgba(139, 154, 126, 0.28), rgba(107, 78, 61, 0.08));
+}
+.landing-discover-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+.landing-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--landing-ink);
+  text-decoration: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(107, 78, 61, 0.22);
+  box-shadow: 0 2px 10px rgba(44, 36, 28, 0.06);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+.landing-chip:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(107, 78, 61, 0.18);
+  border-color: rgba(107, 78, 61, 0.45);
+  background: #fff;
+  color: var(--accent-dark);
+}
+.landing-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.landing-chip--soft {
+  background: rgba(255, 255, 255, 0.5);
+  border-color: rgba(139, 154, 126, 0.35);
+}
+.landing-chip--soft:hover {
+  border-color: rgba(107, 78, 61, 0.4);
+}
+.landing-chip-ext {
+  font-size: 0.75rem;
+  opacity: 0.75;
+  font-weight: 500;
+}
+
+/* 延伸阅读 / 功能特点：共用网格与卡片（与首屏、彼此渐变衔接） */
+.landing-resources {
+  position: relative;
+  padding: 2.25rem 1.25rem 2.5rem;
+  background: linear-gradient(
+    180deg,
+    #ede8e1 0%,
+    #ebe6df 38%,
+    #ece7e0 100%
+  );
+  border-top: none;
+}
+.landing-resources-head {
+  max-width: 720px;
+  margin: 0 auto 1.75rem;
+  text-align: center;
+}
+.landing-resources-title {
+  margin: 0 0 0.5rem;
+  font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", Georgia, serif;
+  font-size: clamp(1.35rem, 3.5vw, 1.75rem);
+  font-weight: 700;
+  color: var(--landing-ink);
+  letter-spacing: 0.12em;
+}
+.landing-resources-sub {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.65;
+  color: var(--muted);
+}
+.landing-cards-grid {
+  max-width: 1040px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.35rem;
+  align-items: stretch;
+}
+.landing-card-foot {
+  margin-top: auto;
+  padding-top: 1rem;
+  width: 100%;
+  text-align: center;
+  font-size: 0.92rem;
+  line-height: 1.65;
+}
+.landing-card-foot a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+.landing-card-foot a:hover {
+  text-decoration: underline;
+  color: var(--accent-dark);
+}
+.landing-card-foot-sep {
+  margin: 0 0.4rem;
+  color: #c9c2b8;
+  user-select: none;
+}
+.landing-card-link {
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+}
+.landing-card-link:hover {
+  text-decoration: underline;
+  color: var(--accent-dark);
+}
+
+@media (max-width: 640px) {
+  .landing-discover-nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 0.35rem;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+  .landing-discover-inner {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .landing-discover-tag {
+    align-self: flex-start;
+  }
+}
+
 .landing-hero {
   position: relative;
   min-height: min(64vh, 540px);
@@ -249,10 +457,15 @@ label { display: block; margin: 0.5rem 0 0.2rem; color: var(--muted); font-size:
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 120% 80% at 50% -20%, rgba(184, 149, 108, 0.18), transparent 55%),
-    radial-gradient(ellipse 80% 50% at 100% 60%, rgba(139, 154, 126, 0.12), transparent 50%),
-    radial-gradient(ellipse 60% 40% at 0% 80%, rgba(107, 78, 61, 0.08), transparent 45%),
-    linear-gradient(180deg, #f3efe6 0%, var(--landing-paper) 45%, #ebe4d8 100%);
+    radial-gradient(ellipse 120% 80% at 50% -20%, rgba(184, 149, 108, 0.14), transparent 55%),
+    radial-gradient(ellipse 80% 50% at 100% 60%, rgba(139, 154, 126, 0.1), transparent 50%),
+    radial-gradient(ellipse 60% 40% at 0% 80%, rgba(107, 78, 61, 0.06), transparent 45%),
+    linear-gradient(
+      180deg,
+      #f0ebe4 0%,
+      #f3efe8 42%,
+      #ede8e1 100%
+    );
   z-index: 0;
 }
 .landing-hero-bg::after {
@@ -344,32 +557,43 @@ label { display: block; margin: 0.5rem 0 0.2rem; color: var(--muted); font-size:
   color: var(--accent-dark);
 }
 .landing-features {
-  padding: 0.875rem 1.25rem 3rem;
-  background: linear-gradient(180deg, #ebe4d8 0%, var(--landing-paper) 100%);
-  border-top: 1px solid rgba(44, 36, 28, 0.06);
-}
-.landing-features-inner {
-  max-width: 960px;
-  margin: 0 auto;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 1.5rem;
+  padding: 2.25rem 1.25rem 3rem;
+  background: linear-gradient(
+    180deg,
+    #ece7e0 0%,
+    #ebe6df 45%,
+    #f0ebe4 100%
+  );
+  border-top: none;
 }
 .landing-card {
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  background: var(--card);
-  border: 1px solid rgba(44, 36, 28, 0.08);
-  border-radius: 12px;
-  padding: 1.5rem 1.35rem;
-  box-shadow: 0 4px 20px rgba(44, 36, 28, 0.06);
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(44, 36, 28, 0.1);
+  border-radius: 14px;
+  padding: 1.5rem 1.35rem 1.45rem;
+  min-height: 17.5rem;
+  box-shadow: 0 6px 24px rgba(44, 36, 28, 0.07);
   transition: box-shadow 0.2s ease, transform 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+.landing-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--landing-gold), var(--landing-sage), var(--accent));
+  opacity: 0.88;
 }
 .landing-card:hover {
-  box-shadow: 0 12px 32px rgba(44, 36, 28, 0.1);
-  transform: translateY(-2px);
+  box-shadow: 0 12px 36px rgba(44, 36, 28, 0.11);
+  transform: translateY(-3px);
 }
 .landing-card-icon {
   box-sizing: border-box;
@@ -407,11 +631,17 @@ label { display: block; margin: 0.5rem 0 0.2rem; color: var(--muted); font-size:
   font-size: 0.95rem;
   line-height: 1.65;
   color: var(--muted);
+  flex: 1 1 auto;
 }
 .landing-footnote {
-  padding: 2.25rem 1.25rem 2.5rem;
+  padding: 2.5rem 1.25rem 2.75rem;
   text-align: center;
-  background: var(--landing-paper);
+  background: linear-gradient(
+    180deg,
+    #f0ebe4 0%,
+    #f5f1ea 55%,
+    #faf8f4 100%
+  );
 }
 .landing-quote {
   margin: 0 auto;
