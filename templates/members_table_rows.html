@@ -1,0 +1,13 @@
+{% for m in rows %}
+<tr>
+  <td class="td-num">{{ rank_map[m.member_id] }}</td>
+  <td class="td-mono">{{ m.member_id }}</td>
+  <td><strong>{{ m.name }}</strong></td>
+  <td>{{ m.gender|gender_cn }}</td>
+  <td>{% if m.birth_date %}{{ m.birth_date.isoformat() }}{% elif m.birth_year is not none %}{{ '%04d-01-01'|format(m.birth_year) }}{% endif %}</td>
+  <td>{% if m.death_date %}{{ m.death_date.isoformat() }}{% elif m.death_year is not none %}{{ '%04d-01-01'|format(m.death_year) }}{% endif %}</td>
+  <td>{{ m.generation_level or '' }}</td>
+  <td class="td-mono">{{ m.spouse_id or '' }}</td>
+  <td class="td-actions"><a href="{{ url_for('member_edit', gid=gid, mid=m.member_id) }}">编辑</a></td>
+</tr>
+{% endfor %}

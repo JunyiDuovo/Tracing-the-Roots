@@ -15,6 +15,34 @@
     </div>
   </header>
 
+  <section class="card card--elevated metric-section" aria-label="本族谱人口统计">
+    <div class="metric-grid{% if total > 0 %} metric-grid--5{% else %} metric-grid--3{% endif %}">
+      <div class="metric">
+        <span class="metric-value">{{ total }}</span>
+        <span class="metric-label">家族总人数</span>
+        <span class="metric-hint">本族谱全部成员</span>
+      </div>
+      <div class="metric">
+        <span class="metric-value">{{ male }}</span>
+        <span class="metric-label">男性人数</span>
+      </div>
+      <div class="metric">
+        <span class="metric-value">{{ female }}</span>
+        <span class="metric-label">女性人数</span>
+      </div>
+      {% if total > 0 %}
+      <div class="metric">
+        <span class="metric-value">{{ male_pct }}%</span>
+        <span class="metric-label">男性占比</span>
+      </div>
+      <div class="metric">
+        <span class="metric-value">{{ female_pct }}%</span>
+        <span class="metric-label">女性占比</span>
+      </div>
+      {% endif %}
+    </div>
+  </section>
+
   <section class="card card--elevated">
     <h2 class="form-section-title">人名搜索</h2>
     <form method="get" action="{{ url_for('members_list', gid=gid) }}" data-track-dirty="1" class="form-stack form-stack--search">
@@ -38,33 +66,25 @@
             <th>成员编号</th>
             <th>姓名</th>
             <th>性别</th>
-            <th>出生年</th>
-            <th>去世年</th>
+            <th>出生年月日</th>
+            <th>去世年月日</th>
             <th>辈分</th>
             <th>配偶编号</th>
             <th class="th-actions">操作</th>
           </tr>
         </thead>
-        <tbody>
-          {% for m in rows %}
-          <tr>
-            <td class="td-num">{{ rank_map[m.member_id] }}</td>
-            <td class="td-mono">{{ m.member_id }}</td>
-            <td><strong>{{ m.name }}</strong></td>
-            <td>{{ m.gender|gender_cn }}</td>
-            <td>{{ m.birth_year or '' }}</td>
-            <td>{{ m.death_year or '' }}</td>
-            <td>{{ m.generation_level or '' }}</td>
-            <td class="td-mono">{{ m.spouse_id or '' }}</td>
-            <td class="td-actions"><a href="{{ url_for('member_edit', gid=gid, mid=m.member_id) }}">编辑</a></td>
-          </tr>
-          {% endfor %}
+        <tbody id="members-table-body">
+          {% include "members_table_rows.html" %}
         </tbody>
       </table>
+    </div>
+    <div id="members-expand-container">
+      {% include "members_expand_bar.html" %}
     </div>
     {% if not rows %}
     <p class="empty-hint">暂无成员，请先 <a href="{{ url_for('member_new', gid=gid) }}">新增成员</a>。</p>
     {% endif %}
   </section>
 </div>
+<script src="{{ url_for('static', filename='js/members-expand.js') }}" defer></script>
 {% endblock %}

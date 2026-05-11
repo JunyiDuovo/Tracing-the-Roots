@@ -219,6 +219,8 @@ def main():
                 str(r["tree_id"]),
                 esc(r["name"]),
                 r["gender"],
+                "\\N",
+                "\\N",
                 str(r["birth_year"]) if r["birth_year"] is not None else "\\N",
                 str(r["death_year"]) if r["death_year"] is not None else "\\N",
                 bio_cell,
@@ -233,7 +235,7 @@ def main():
     cur.execute("ALTER TABLE member DISABLE TRIGGER USER;")
 
     copy_sql = (
-        "COPY member (member_id, tree_id, name, gender, birth_year, death_year, bio, "
+        "COPY member (member_id, tree_id, name, gender, birth_date, death_date, birth_year, death_year, bio, "
         "generation_level, father_id, mother_id, spouse_id, created_by) FROM STDIN "
         "WITH (FORMAT text, DELIMITER E'\\t', NULL '\\N')"
     )

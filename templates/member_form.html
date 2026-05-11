@@ -33,20 +33,20 @@
         {% set bdv = request.form.get('birth_date', '') %}
         {% set ddv = request.form.get('death_date', '') %}
       {% else %}
-        {% set bdv = ("%04d-01-01"|format(m.birth_year)) if m and m.birth_year is not none else '' %}
-        {% set ddv = ("%04d-01-01"|format(m.death_year)) if m and m.death_year is not none else '' %}
+        {% set bdv = (m.birth_date.isoformat() if m.birth_date else (("%04d-01-01"|format(m.birth_year)) if m and m.birth_year is not none else '')) %}
+        {% set ddv = (m.death_date.isoformat() if m.death_date else (("%04d-01-01"|format(m.death_year)) if m and m.death_year is not none else '')) %}
       {% endif %}
       <div class="field-row">
         <div class="field">
-          <label for="birth_date">出生日期（保存为出生年）</label>
+          <label for="birth_date">出生年月日</label>
           <input id="birth_date" name="birth_date" type="date" value="{{ bdv }}" min="0800-01-01">
         </div>
         <div class="field">
-          <label for="death_date">去世日期（保存为去世年，可不填）</label>
+          <label for="death_date">去世年月日（可选）</label>
           <input id="death_date" name="death_date" type="date" value="{{ ddv }}" min="0800-01-01">
         </div>
       </div>
-      <p class="field-hint">仅年份会写入数据库。出生、去世均不可选今天之后的日期；去世不可早于出生。</p>
+      <p class="field-hint">出生、去世均为公历日期；选择与日历一致的闰年与每月天数（如 2 月 29 日仅闰年可选）。出生、去世均不可选今天之后的日期，去世不可早于出生。</p>
 
       <div class="field">
         <label for="generation_level">辈分 generation_level</label>

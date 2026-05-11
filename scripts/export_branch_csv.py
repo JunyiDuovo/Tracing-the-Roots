@@ -39,18 +39,18 @@ def main() -> int:
 
     copy_sql = f"""COPY (
   WITH RECURSIVE sub AS (
-    SELECT member_id, tree_id, name, gender, birth_year, death_year, bio,
+    SELECT member_id, tree_id, name, gender, birth_date, death_date, birth_year, death_year, bio,
            generation_level, father_id, mother_id, spouse_id, created_by
     FROM member WHERE member_id = {aid}
     UNION ALL
-    SELECT m.member_id, m.tree_id, m.name, m.gender, m.birth_year, m.death_year, m.bio,
+    SELECT m.member_id, m.tree_id, m.name, m.gender, m.birth_date, m.death_date, m.birth_year, m.death_year, m.bio,
            m.generation_level, m.father_id, m.mother_id, m.spouse_id, m.created_by
     FROM sub s
     JOIN member m
       ON (m.father_id = s.member_id OR m.mother_id = s.member_id)
      AND m.tree_id = s.tree_id
   )
-  SELECT member_id, tree_id, name, gender, birth_year, death_year, bio,
+  SELECT member_id, tree_id, name, gender, birth_date, death_date, birth_year, death_year, bio,
          generation_level, father_id, mother_id, spouse_id, created_by
   FROM sub
   ORDER BY member_id

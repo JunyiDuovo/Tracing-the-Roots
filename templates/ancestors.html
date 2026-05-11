@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% block title %}祖先查询 — 寻根溯源{% endblock %}
 {% block body %}
-<div class="page-inner">
+<div id="ancestors-root" class="page-inner"
+  data-hint-url="{{ url_for('api_member_hint', gid=gid) }}">
   <header class="page-header">
     <h1 class="page-title">人物祖先查询</h1>
     <p class="page-kicker">族谱 <span class="kbd">#{{ gid }}</span></p>
@@ -9,19 +10,39 @@
 
   <section class="card card--elevated">
     <h2 class="form-section-title">查询成员</h2>
-    <form method="get" data-track-dirty="1" class="form-stack form-stack--search">
+    <form method="get" data-track-dirty="1" class="form-stack form-stack--search" id="anc-form">
       <div class="field field--grow">
         <label for="anc-id">成员 member_id</label>
-        <input id="anc-id" name="id" value="{{ mid or '' }}" required placeholder="输入要追溯的成员编号">
+        <input id="anc-id" name="id" value="{{ mid or '' }}" required inputmode="numeric" pattern="[0-9]*"
+          placeholder="输入要追溯的成员编号" autocomplete="off">
       </div>
       <div class="field field--btn">
         <label class="label-spacer">&nbsp;</label>
-        <button class="btn" type="submit">追溯祖先</button>
+        <button class="btn" type="submit" id="anc-submit"
+          {% if ancestor_lookup is not none and not ancestor_lookup.exists %}disabled aria-disabled="true"{% endif %}
+        >追溯祖先</button>
       </div>
     </form>
+
+    <div id="ancestors-hint-block" class="ancestors-hint-block" role="region" aria-label="成员校验说明"
+      {% if ancestor_lookup is none %}hidden{% endif %}>
+      {% if ancestor_lookup is not none %}
+        {% if not ancestor_lookup.exists %}
+      <p class="ancestors-msg ancestors-msg--warn">该成员不存在于谱内，请检查</p>
+        {% else %}
+      <p class="ancestors-msg ancestors-msg--ok">
+        <span class="kbd">{{ mid }}</span> {{ ancestor_lookup.name }}
+      </p>
+          {% if ancestor_lookup.is_root %}
+      <p class="ancestors-msg ancestors-msg--info">该成员为该谱的祖先（谱内未记录其父母）</p>
+          {% endif %}
+        {% endif %}
+      {% endif %}
+    </div>
   </section>
 
-  {% if mid and rows %}
+  {% if ancestor_queried %}
+    {% if rows %}
   <section class="card card--elevated">
     <h2 class="form-section-title">父辈以上血亲（按 hop）</h2>
     <p class="muted">按代数（hop）列出父辈以上血亲。</p>
@@ -30,10 +51,10 @@
         <thead>
           <tr>
             <th>hop</th>
-            <th>member_id</th>
-            <th>name</th>
-            <th>gender</th>
-            <th>birth_year</th>
+            <th>成员ID</th>
+            <th>姓名</th>
+            <th>性别</th>
+            <th>出生年月日</th>
           </tr>
         </thead>
         <tbody>
@@ -42,8 +63,8 @@
             <td>{{ r.hop }}</td>
             <td class="td-mono">{{ r.member_id }}</td>
             <td><strong>{{ r.name }}</strong></td>
-            <td>{{ r.gender }}</td>
-            <td>{{ r.birth_year or '' }}</td>
+            <td>{{ r.gender|gender_cn }}</td>
+            <td>{% if r.birth_date is not none %}{{ r.birth_date.strftime('%Y-%m-%d') }}{% elif r.birth_year %}{{ '%04d-01-01'|format(r.birth_year) }}{% endif %}</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -53,8 +74,120 @@
     <div class="tree-line tree-line--compact">{% for r in rows|reverse %}{{ '  ' * (r.hop - 1) }}↑ {{ r.name }} ({{ r.member_id }})
 {% endfor %}</div>
   </section>
-  {% elif mid %}
-  <section class="card card--elevated"><p class="empty-hint">未找到祖先或成员不存在。</p></section>
+    {% else %}
+  <section class="card card--elevated">
+    <p class="ancestors-msg ancestors-msg--muted ancestors-msg--solo">未找到祖先</p>
+  </section>
+    {% endif %}
   {% endif %}
 </div>
+<script>
+(function () {
+  var root = document.getElementById("ancestors-root");
+  var input = document.getElementById("anc-id");
+  var btn = document.getElementById("anc-submit");
+  var hintBlock = document.getElementById("ancestors-hint-block");
+  if (!root || !input || !btn) return;
+  var hintUrl = root.getAttribute("data-hint-url");
+
+  function debounce(fn, ms) {
+    var t = null;
+    return function () {
+      var ctx = this, args = arguments;
+      clearTimeout(t);
+      t = setTimeout(function () { fn.apply(ctx, args); }, 280);
+    };
+  }
+
+  function setDisabled(on) {
+    if (on) {
+      btn.setAttribute("disabled", "disabled");
+      btn.setAttribute("aria-disabled", "true");
+    } else {
+      btn.removeAttribute("disabled");
+      btn.removeAttribute("aria-disabled");
+    }
+  }
+
+  function renderHint(midStr, payload) {
+    var v = String(midStr || "").trim();
+    if (!hintBlock) return;
+    if (!/^[0-9]+$/.test(v)) {
+      hintBlock.innerHTML = "";
+      hintBlock.setAttribute("hidden", "hidden");
+      setDisabled(false);
+      return;
+    }
+    hintBlock.removeAttribute("hidden");
+    hintBlock.innerHTML = "";
+    if (payload && payload.ok && String(payload.member_id) === v) {
+      setDisabled(false);
+      var okP = document.createElement("p");
+      okP.className = "ancestors-msg ancestors-msg--ok";
+      var kbd = document.createElement("span");
+      kbd.className = "kbd";
+      kbd.textContent = v;
+      okP.appendChild(kbd);
+      okP.appendChild(document.createTextNode(" "));
+      okP.appendChild(document.createTextNode(String(payload.name || "")));
+      hintBlock.appendChild(okP);
+      if (payload.is_root) {
+        var info = document.createElement("p");
+        info.className = "ancestors-msg ancestors-msg--info";
+        info.textContent = "该成员为该谱的祖先（谱内未记录其父母）";
+        hintBlock.appendChild(info);
+      }
+      return;
+    }
+    setDisabled(true);
+    var warn = document.createElement("p");
+    warn.className = "ancestors-msg ancestors-msg--warn";
+    warn.textContent = "该成员不存在于谱内，请检查";
+    hintBlock.appendChild(warn);
+  }
+
+  function fetchHint() {
+    var v = String(input.value || "").trim();
+    if (!/^[0-9]+$/.test(v) || !hintUrl) {
+      if (hintBlock) {
+        hintBlock.innerHTML = "";
+        hintBlock.setAttribute("hidden", "hidden");
+      }
+      setDisabled(false);
+      return;
+    }
+    hintBlock.removeAttribute("hidden");
+    var u = hintUrl + (hintUrl.indexOf("?") >= 0 ? "&" : "?") + "member_id=" + encodeURIComponent(v);
+    fetch(u, { credentials: "same-origin", headers: { Accept: "application/json" } })
+      .then(function (r) { return r.ok ? r.json() : { ok: false }; })
+      .then(function (j) { renderHint(v, j); })
+      .catch(function () {
+        if (hintBlock) {
+          hintBlock.innerHTML = "";
+          hintBlock.setAttribute("hidden", "hidden");
+        }
+        setDisabled(false);
+      });
+  }
+
+  var runDebounced = debounce(fetchHint, 280);
+  input.addEventListener("input", runDebounced);
+  input.addEventListener("blur", fetchHint);
+
+  if (hintBlock && /^[0-9]+$/.test(String(input.value || "").trim())) {
+    hintBlock.removeAttribute("hidden");
+    fetchHint();
+  }
+
+  var ancForm = document.getElementById("anc-form");
+  if (!ancForm) return;
+  ancForm.addEventListener("submit", function (e) {
+    var v = String(input.value || "").trim();
+    if (!/^[0-9]+$/.test(v)) return;
+    if (btn.hasAttribute("disabled")) {
+      e.preventDefault();
+    }
+  });
+})();
+</script>
 {% endblock %}

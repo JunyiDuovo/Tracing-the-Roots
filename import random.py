@@ -2,14 +2,161 @@
 生成 members.csv:多族谱、非整齐总人数。
 全局 member_id:按辈分 generation_level 从小到大分配；同一族谱、同辈内先男后女再随机，
 保证每谱「第一人」为男性始祖，便于传承；祖先辈分仍 < 后辈。
+
+出生 / 去世为公历合法日期字符串 YYYY-MM-DD；随机出的出生日、去世日均不得晚于「脚本运行时」的本地当日。
+若在合理寿命内无法得到不晚于当日的去世日（多为近代出生者），去世日留空（CSV 中空单元格）。
+随机配偶须满足中国大陆法定婚龄（男满 22 周岁、女满 20 周岁，以脚本运行日为参照）；未满足则不写入 spouse 或调整主谱夫妻出生日。
+夫妻二人出生年份多为相差 ±5 年内（可男大或女大）；仍须满足前述婚龄与本程序其它约束。
+入库 import_member_csv 写入 birth_date/death_date 与 birth_year/death_year（PostgreSQL 迁移见 sql/17_member_birth_death_date.sql）。
 """
 import csv
 import random
+from datetime import date
 
 # 固定种子可复现；改为 None 则每次不同
 _SEED = None
 if _SEED is not None:
     random.seed(_SEED)
+
+# 全谱随机数据的最早公历出生年（含第 1 代男性始祖及其配偶）
+_EARLIEST_BIRTH_YEAR = 1000
+
+
+def _random_date_in_year(year: int, cap: date) -> date:
+    """在公元 year 年内均匀随机某一天，且日期不晚于 cap（本地「今天」）。"""
+    first = date(year, 1, 1)
+    last = date(year, 12, 31)
+    last = min(last, cap)
+    if first > last:
+        return last
+    return date.fromordinal(random.randint(first.toordinal(), last.toordinal()))
+
+
+def _clamp_death_after_birth(birth: date, cap: date) -> date | None:
+    """在出生后约 45～92 年间随机去世日，须严格晚于出生且 ≤ cap；若无法在 cap 之前满足则视为仍在世（不写去世日）。"""
+    cap_ord = cap.toordinal()
+    bir_ord = birth.toordinal()
+    low_ord = bir_ord + 45 * 365
+    span_hi = bir_ord + 92 * 369
+    high_ord = min(span_hi, cap_ord)
+    if low_ord >= cap_ord:
+        return None
+    high_ord = max(high_ord, low_ord + 1)
+    high_ord = min(high_ord, cap_ord)
+    if low_ord >= high_ord:
+        return None
+    return date.fromordinal(random.randint(low_ord, high_ord))
+
+
+def _birth_after_parents(
+    father_bd: date, mother_bd: date, year_offset_lo: int, year_offset_hi: int, cap: date
+) -> date:
+    """子女出生日：其出生年须严格大于父母双方出生年（满足库触发器按年比较）；出生日不晚于 cap。"""
+    base_y = max(father_bd.year, mother_bd.year)
+    lo_y = base_y + year_offset_lo
+    hi_y = min(base_y + year_offset_hi, cap.year)
+    lo_y = max(lo_y, base_y + 1, _EARLIEST_BIRTH_YEAR)
+    if lo_y > hi_y:
+        child_y = hi_y
+    else:
+        child_y = random.randint(lo_y, hi_y)
+    return _random_date_in_year(child_y, cap)
+
+
+def _iso(d: date) -> str:
+    return d.isoformat()
+
+
+def _iso_death(d: date | None) -> str:
+    """去世日可空（仍在世或无法生成符合 cap 的去世日）。"""
+    return d.isoformat() if d is not None else ""
+
+
+# 夫妻二人出生年相差不宜过大（±5 年量级）；不满足法定婚龄时 legalization / 抽样会放宽。
+_SPOUSE_BIRTH_YEAR_DELTA_MAX = 5
+
+# 中国大陆法定结婚年龄（周岁；以脚本运行日为参照）
+_LEGAL_MARRY_AGE_MALE = 22
+_LEGAL_MARRY_AGE_FEMALE = 20
+
+
+def _full_years_on(birth: date, ref: date) -> int:
+    """周岁：到 ref 当日是否已过生日。"""
+    y = ref.year - birth.year
+    if (ref.month, ref.day) < (birth.month, birth.day):
+        y -= 1
+    return y
+
+
+def _pair_meets_marriage_law_cn(hubby_bd: date, wifey_bd: date, ref: date) -> bool:
+    """男≥22 周岁、女≥20 周岁。"""
+    return (
+        _full_years_on(hubby_bd, ref) >= _LEGAL_MARRY_AGE_MALE
+        and _full_years_on(wifey_bd, ref) >= _LEGAL_MARRY_AGE_FEMALE
+    )
+
+
+def _meets_own_marriage_age(gender: str, birth: date, ref: date) -> bool:
+    """仅本人已达「可登记结婚」周岁的性别下限。"""
+    if gender == "Male":
+        return _full_years_on(birth, ref) >= _LEGAL_MARRY_AGE_MALE
+    if gender == "Female":
+        return _full_years_on(birth, ref) >= _LEGAL_MARRY_AGE_FEMALE
+    return False
+
+
+def _legalize_mainline_couple(
+    h_bd: date,
+    w_bd: date,
+    cap: date,
+    parent_max_birth_year: int | None,
+) -> tuple[date, date]:
+    """主谱夫妻二人到 cap 当日均须已满法定婚龄；丈夫出生年必须严格大于父母的最大出生年（若有父母）。"""
+    for _ in range(260):
+        h_age_ok = _full_years_on(h_bd, cap) >= _LEGAL_MARRY_AGE_MALE
+        w_age_ok = _full_years_on(w_bd, cap) >= _LEGAL_MARRY_AGE_FEMALE
+        hier_ok = parent_max_birth_year is None or h_bd.year > parent_max_birth_year
+        if h_age_ok and w_age_ok and hier_ok:
+            return h_bd, w_bd
+        if not hier_ok or not h_age_ok:
+            ny = h_bd.year
+            if parent_max_birth_year is not None:
+                ny = max(ny - random.randint(1, 10), parent_max_birth_year + 1)
+            else:
+                ny = ny - random.randint(1, 10)
+            ny = max(_EARLIEST_BIRTH_YEAR, ny)
+            ny = min(ny, cap.year)
+            h_bd = _random_date_in_year(ny, cap)
+            continue
+        if not w_age_ok:
+            ny = max(_EARLIEST_BIRTH_YEAR, w_bd.year - random.randint(1, 15))
+            ny = min(ny, cap.year)
+            w_bd = _random_date_in_year(ny, cap)
+
+    return h_bd, w_bd
+
+
+def _sample_spouse_birth_for_cn_law(child_bd: date, child_is_male: bool, cap: date) -> date | None:
+    """随机配偶出生日：优先在子女生年 ±5 年内，再放宽区间，使双方均达法定婚龄。"""
+    cy = child_bd.year
+    tiers = (
+        (-_SPOUSE_BIRTH_YEAR_DELTA_MAX, _SPOUSE_BIRTH_YEAR_DELTA_MAX, 180),
+        (-12, 12, 120),
+        (-20, 18, 90),
+    )
+    for lo, hi, cap_n in tiers:
+        for _ in range(cap_n):
+            delta = random.randint(lo, hi)
+            sy = cy + delta
+            sy = max(_EARLIEST_BIRTH_YEAR, min(sy, cap.year))
+            s_bd = _random_date_in_year(sy, cap)
+            if child_is_male:
+                hubby, wifey = child_bd, s_bd
+            else:
+                hubby, wifey = s_bd, child_bd
+            if _pair_meets_marriage_law_cn(hubby, wifey, cap):
+                return s_bd
+    return None
 
 
 def generate_random_name(surname, gender, male_chars, female_chars):
@@ -21,11 +168,55 @@ def generate_random_name(surname, gender, male_chars, female_chars):
     return surname + random.choice(chars_pool) + random.choice(chars_pool)
 
 
+def _bio_parent_line(
+    father_id: int | None,
+    mother_id: int | None,
+    id_to_name: dict[int, str],
+    child_gender: str,
+) -> str:
+    """父母姓名可查时：「父与母之子/女」；仅一方则「某之子/女」。"""
+    sex = "子" if child_gender == "Male" else "女"
+    fid = int(father_id) if father_id is not None else None
+    mid = int(mother_id) if mother_id is not None else None
+    fn = id_to_name.get(fid) if fid is not None else None
+    mn = id_to_name.get(mid) if mid is not None else None
+    if fn and mn:
+        return f"{fn}与{mn}之{sex}"
+    if fn:
+        return f"{fn}之{sex}"
+    if mn:
+        return f"{mn}之{sex}"
+    return ""
+
+
+def _bio_spouse_role_line(spouse_name: str | None, self_gender: str) -> str:
+    """配偶姓名已知：男为「女方姓名之夫」，女为「男方姓名之妻」。"""
+    if not spouse_name:
+        return ""
+    if self_gender == "Male":
+        return f"{spouse_name}之夫"
+    return f"{spouse_name}之妻"
+
+
+def _join_bio_parts(*parts: str) -> str:
+    """将多个简介分句用中文分号连接，句末顿号。"""
+    segs = []
+    for p in parts:
+        if not p:
+            continue
+        t = str(p).strip().rstrip("。")
+        if t:
+            segs.append(t)
+    if not segs:
+        return ""
+    return "；".join(segs) + "。"
+
+
 def random_tree_sizes():
     """
     共 11 个族谱；总人数为随机非「整数万」
     """
-    target_total = random.randint(250_000, 270_000)
+    target_total = random.randint(270_000, 300_000)
     raw = [
         65_000,
         35_000,
@@ -35,7 +226,8 @@ def random_tree_sizes():
         20_000,
         18_000,
         17_000,
-        *[15_000] * 3
+        *[15_000] * 3,
+        10000
     ]
     jittered = []
     for r in raw:
@@ -59,7 +251,7 @@ def assign_global_ids_by_generation(all_rows):
     （组内仍随机打乱同性别的顺序），使每个族谱在全局编号中首次出现者为男性始祖。
     并重写 father_id / mother_id / spouse_id(均为本树局部 id -> 全局 id)。
     """
-    # row: member_id, tree_id, name, gender, birth_year, death_year, bio,
+    # row: member_id, tree_id, name, gender, birth_date, death_date, bio,
     #      generation_level, father_id, mother_id, spouse_id
     by_gen = {}
     for r in all_rows:
@@ -123,20 +315,50 @@ def assign_global_ids_by_generation(all_rows):
 
 
 def generate_one_tree(tree_id, target_size, main_surname, male_chars, female_chars, surnames):
-    """单族谱内使用局部 member_id(从 1 递增)，返回行列表。"""
+    """单族谱内使用局部 member_id(从 1 递增)，返回行列表。
+    birth_date/death_date 列为 YYYY-MM-DD 合法公历字符串；去世可空（不晚于运行当日）。
+    """
+    cap = date.today()
     local_id = 1
     members = []
     couples = []
+    id_to_name: dict[int, str] = {}
 
     current_father_id = None
     current_mother_id = None
-    base_year = 1000
+    base_year = _EARLIEST_BIRTH_YEAR
+
+    parent_max_birth_year = None
 
     for gen in range(1, 31):
         husband_id = local_id
         local_id += 1
-        h_birth = base_year + (gen - 1) * 25 + random.randint(-2, 5)
+        h_year = base_year + (gen - 1) * 25 + random.randint(-2, 5)
+        h_year = max(_EARLIEST_BIRTH_YEAR, min(h_year, cap.year))
+        if parent_max_birth_year is not None:
+            h_year = max(h_year, parent_max_birth_year + 1)
+        h_bd = _random_date_in_year(h_year, cap)
         h_name = generate_random_name(main_surname, "Male", male_chars, female_chars)
+
+        wife_id = local_id
+        local_id += 1
+        # 妻出生年多在夫年 ±5 年内（可男大或女大），再 legalize 满足婚龄与父母年序
+        w_year = h_bd.year + random.randint(
+            -_SPOUSE_BIRTH_YEAR_DELTA_MAX, _SPOUSE_BIRTH_YEAR_DELTA_MAX
+        )
+        w_year = max(_EARLIEST_BIRTH_YEAR, min(w_year, cap.year))
+        w_bd = _random_date_in_year(w_year, cap)
+        h_bd, w_bd = _legalize_mainline_couple(h_bd, w_bd, cap, parent_max_birth_year)
+        h_dd = _clamp_death_after_birth(h_bd, cap)
+        w_dd = _clamp_death_after_birth(w_bd, cap)
+        w_surname = random.choice([s for s in surnames if s != main_surname])
+        w_name = generate_random_name(w_surname, "Female", male_chars, female_chars)
+
+        h_bio = _join_bio_parts(
+            f"{main_surname}氏第{gen}代传人",
+            _bio_parent_line(current_father_id, current_mother_id, id_to_name, "Male"),
+            _bio_spouse_role_line(w_name, "Male"),
+        )
 
         members.append(
             [
@@ -144,21 +366,22 @@ def generate_one_tree(tree_id, target_size, main_surname, male_chars, female_cha
                 tree_id,
                 h_name,
                 "Male",
-                h_birth,
-                h_birth + random.randint(45, 80),
-                f"{main_surname}氏第{gen}代传人。",
+                _iso(h_bd),
+                _iso_death(h_dd),
+                h_bio,
                 gen,
                 current_father_id,
                 current_mother_id,
                 husband_id + 1,
             ]
         )
+        id_to_name[husband_id] = h_name
 
-        wife_id = local_id
-        local_id += 1
-        w_birth = h_birth + random.randint(-5, 5)
-        w_surname = random.choice([s for s in surnames if s != main_surname])
-        w_name = generate_random_name(w_surname, "Female", male_chars, female_chars)
+        w_bio = _join_bio_parts(
+            f"嫁入{main_surname}家",
+            "",
+            _bio_spouse_role_line(h_name, "Female"),
+        )
 
         members.append(
             [
@@ -166,28 +389,30 @@ def generate_one_tree(tree_id, target_size, main_surname, male_chars, female_cha
                 tree_id,
                 w_name,
                 "Female",
-                w_birth,
-                w_birth + random.randint(45, 80),
-                f"嫁入{main_surname}家。",
+                _iso(w_bd),
+                _iso_death(w_dd),
+                w_bio,
                 gen,
                 "",
                 "",
                 husband_id,
             ]
         )
+        id_to_name[wife_id] = w_name
 
-        couples.append((husband_id, wife_id, gen, h_birth))
+        couples.append((husband_id, wife_id, gen, h_bd, w_bd))
         current_father_id = husband_id
         current_mother_id = wife_id
+        parent_max_birth_year = max(h_bd.year, w_bd.year)
 
     current_size = 60
 
     while current_size < target_size:
         parent = random.choice(couples)
-        p_father_id, p_mother_id, p_gen, p_birth = parent
+        p_father_id, p_mother_id, p_gen, p_hbd, p_wbd = parent
 
         child_gen = p_gen + 1
-        child_birth = p_birth + random.randint(20, 35)
+        child_bd = _birth_after_parents(p_hbd, p_wbd, 20, 35, cap)
 
         is_male = random.choice([True, False])
         child_id = local_id
@@ -197,61 +422,99 @@ def generate_one_tree(tree_id, target_size, main_surname, male_chars, female_cha
         c_name = generate_random_name(main_surname, gender, male_chars, female_chars)
 
         will_marry = random.random() > 0.3
-        # 子代 + 配偶共占 2 个名额；若只剩 1 个名额仍写 spouse_id,会指向未生成的配偶行
         if will_marry and current_size + 2 > target_size:
             will_marry = False
+        if will_marry and not _meets_own_marriage_age(gender, child_bd, cap):
+            will_marry = False
+
+        spouse_birth_for_pair: date | None = None
+        if will_marry:
+            spouse_birth_for_pair = _sample_spouse_birth_for_cn_law(child_bd, is_male, cap)
+            if spouse_birth_for_pair is None:
+                will_marry = False
+
+        s_name: str | None = None
+        s_gender_str: str | None = None
+        s_bd_val: date | None = None
+        if will_marry and spouse_birth_for_pair is not None:
+            s_surname = random.choice([s for s in surnames if s != main_surname])
+            if is_male:
+                s_gender_str = "Female"
+                s_name = generate_random_name(
+                    s_surname, "Female", male_chars, female_chars
+                )
+            else:
+                s_gender_str = "Male"
+                s_name = generate_random_name(s_surname, "Male", male_chars, female_chars)
+            s_bd_val = spouse_birth_for_pair
+
         spouse_id = local_id if will_marry else ""
 
+        child_bio = _join_bio_parts(
+            f"{main_surname}氏第{child_gen}代传人",
+            _bio_parent_line(p_father_id, p_mother_id, id_to_name, gender),
+            _bio_spouse_role_line(s_name, gender) if s_name else "",
+        )
+
+        c_dd = _clamp_death_after_birth(child_bd, cap)
         members.append(
             [
                 child_id,
                 tree_id,
                 c_name,
                 gender,
-                child_birth,
-                child_birth + random.randint(40, 90),
-                f"{main_surname}氏第{child_gen}代传人。",
+                _iso(child_bd),
+                _iso_death(c_dd),
+                child_bio,
                 child_gen,
                 p_father_id,
                 p_mother_id,
                 spouse_id,
             ]
         )
+        id_to_name[child_id] = c_name
         current_size += 1
 
-        if will_marry and current_size < target_size:
+        if will_marry and current_size < target_size and s_name is not None and s_bd_val is not None:
             s_id = local_id
             local_id += 1
-            s_birth = child_birth + random.randint(-5, 5)
-
-            s_surname = random.choice([s for s in surnames if s != main_surname])
+            s_bd = s_bd_val
+            s_gender = s_gender_str
 
             if is_male:
-                s_gender = "Female"
-                s_name = generate_random_name(s_surname, s_gender, male_chars, female_chars)
-                couples.append((child_id, s_id, child_gen, child_birth))
+                hubby_bd = child_bd
+                wifey_bd = s_bd
+                couples.append((child_id, s_id, child_gen, hubby_bd, wifey_bd))
                 spouse_target = child_id
             else:
-                s_gender = "Male"
-                s_name = generate_random_name(s_surname, s_gender, male_chars, female_chars)
-                couples.append((s_id, child_id, child_gen, s_birth))
+                hubby_bd = s_bd
+                wifey_bd = child_bd
+                couples.append((s_id, child_id, child_gen, hubby_bd, wifey_bd))
                 spouse_target = child_id
 
+            spouse_bio = _join_bio_parts(
+                f"与{c_name}结为伴侣",
+                "",
+                _bio_spouse_role_line(c_name, s_gender_str),
+            )
+
+            s_dd = _clamp_death_after_birth(s_bd, cap)
             members.append(
                 [
                     s_id,
                     tree_id,
                     s_name,
-                    s_gender,
-                    s_birth,
-                    s_birth + random.randint(40, 90),
-                    f"与{c_name}结为伴侣。",
+                    s_gender_str,
+                    _iso(s_bd),
+                    _iso_death(s_dd),
+                    spouse_bio,
                     child_gen,
                     "",
                     "",
                     spouse_target,
                 ]
             )
+            id_to_name[s_id] = s_name
             current_size += 1
 
     return members
@@ -325,8 +588,8 @@ def generate_genealogy_csv(filename="members.csv"):
                 "tree_id",
                 "name",
                 "gender",
-                "birth_year",
-                "death_year",
+                "birth_date",
+                "death_date",
                 "bio",
                 "generation_level",
                 "father_id",

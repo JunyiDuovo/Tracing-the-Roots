@@ -1,4 +1,4 @@
-"""SQLAlchemy 模型 — 与 sql/01_schema.sql 对齐（member 列与 members.csv 表头一致）。"""
+"""SQLAlchemy 模型 — 与 sql/01_schema.sql 对齐（member：birth_date/death_date 与 CSV 一致，year 列冗余）。"""
 from __future__ import annotations
 
 from datetime import date, datetime
@@ -87,6 +87,8 @@ class Member(Base):
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     gender: Mapped[str] = mapped_column(String(16), nullable=False)
+    birth_date: Mapped[date | None] = mapped_column(Date)
+    death_date: Mapped[date | None] = mapped_column(Date)
     birth_year: Mapped[int | None] = mapped_column(Integer)
     death_year: Mapped[int | None] = mapped_column(Integer)
     bio: Mapped[str | None] = mapped_column(Text)
@@ -104,6 +106,10 @@ class Member(Base):
     )
 
     __table_args__ = (
+        CheckConstraint(
+            "death_date IS NULL OR birth_date IS NULL OR death_date >= birth_date",
+            name="ck_member_life_dates",
+        ),
         CheckConstraint(
             "death_year IS NULL OR birth_year IS NULL OR death_year >= birth_year",
             name="ck_member_life",

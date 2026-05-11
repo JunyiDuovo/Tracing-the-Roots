@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% block title %}亲缘通路 — 寻根溯源{% endblock %}
 {% block body %}
-<div class="page-inner">
+<div id="kinship-root" class="page-inner"
+  data-hint-url="{{ url_for('api_member_hint', gid=gid) }}">
   <header class="page-header">
     <h1 class="page-title">两人亲缘关系</h1>
     <p class="page-kicker">族谱 <span class="kbd">#{{ gid }}</span></p>
@@ -9,16 +10,26 @@
 
   <section class="card card--elevated">
     <h2 class="form-section-title">查询通路</h2>
-    <p class="muted">在血缘（父子/母女）与婚姻关系构成的无向图上做广度优先搜索；若存在通路则列出经过的成员姓名。</p>
+    <p class="muted">
+      在血缘（父子/母女）与婚姻关系构成的无向图上做广度优先搜索；若存在通路则列出每一步的<strong>成员 ID 与姓名</strong>。
+    </p>
     <form method="post" data-track-dirty="1" class="form-stack">
       <div class="field-row">
         <div class="field">
           <label for="kin-a">成员 A ID</label>
-          <input id="kin-a" name="a" value="{{ a or '' }}" required inputmode="numeric" pattern="[0-9]*" placeholder="member_id">
+          <input id="kin-a" name="a" type="text" value="{{ a or '' }}" required inputmode="numeric"
+            pattern="[0-9]*" placeholder="member_id" autocomplete="off">
+          <p id="kin-hint-a" class="kin-member-hint muted" role="status" aria-live="polite">
+            {% if name_a is not none and a %}<span class="kbd">{{ a }}</span> {{ name_a }}{% endif %}
+          </p>
         </div>
         <div class="field">
           <label for="kin-b">成员 B ID</label>
-          <input id="kin-b" name="b" value="{{ b or '' }}" required inputmode="numeric" pattern="[0-9]*" placeholder="member_id">
+          <input id="kin-b" name="b" type="text" value="{{ b or '' }}" required inputmode="numeric"
+            pattern="[0-9]*" placeholder="member_id" autocomplete="off">
+          <p id="kin-hint-b" class="kin-member-hint muted" role="status" aria-live="polite">
+            {% if name_b is not none and b %}<span class="kbd">{{ b }}</span> {{ name_b }}{% endif %}
+          </p>
         </div>
       </div>
       <div class="form-actions">
@@ -30,8 +41,79 @@
   {% if path %}
   <section class="card card--elevated card--path">
     <h2 class="form-section-title">通路</h2>
-    <p class="path-chain">{% for n in path %}<span class="path-node">{{ n }}</span>{% if not loop.last %}<span class="path-arrow">→</span>{% endif %}{% endfor %}</p>
+    <p class="path-chain">
+      {% for mid, pname in path %}
+      <span class="path-node">
+        <span class="path-node-id">{{ mid }}</span><span class="path-node-gap" aria-hidden="true">·</span><span class="path-node-name">{{ pname }}</span>
+      </span>{% if not loop.last %}<span class="path-arrow" aria-hidden="true">→</span>{% endif %}
+      {% endfor %}
+    </p>
   </section>
   {% endif %}
 </div>
+<script>
+(function () {
+  var root = document.getElementById("kinship-root");
+  if (!root) return;
+  var hintUrl = root.getAttribute("data-hint-url");
+  if (!hintUrl) return;
+  function debounce(fn, ms) {
+    var t = null;
+    return function () {
+      var ctx = this, args = arguments;
+      clearTimeout(t);
+      t = setTimeout(function () { fn.apply(ctx, args); }, ms);
+    };
+  }
+  function setHint(elHint, raw, payload) {
+    if (!elHint) return;
+    var v = String(raw || "").trim();
+    elHint.textContent = "";
+    if (!/^\d+$/.test(v)) {
+      return;
+    }
+    if (payload && payload.ok && String(payload.member_id) === v) {
+      var kbd = document.createElement("span");
+      kbd.className = "kbd";
+      kbd.textContent = v;
+      elHint.appendChild(kbd);
+      elHint.appendChild(document.createTextNode(" " + String(payload.name || "")));
+      return;
+    }
+    var miss = document.createElement("span");
+    miss.textContent = "本族谱中未找到该成员 ID";
+    elHint.appendChild(miss);
+  }
+  function fetchHint(value, elHint) {
+    var v = String(value || "").trim();
+    if (!/^\d+$/.test(v)) {
+      setHint(elHint, v, null);
+      return;
+    }
+    var u = hintUrl + (hintUrl.indexOf("?") >= 0 ? "&" : "?") + "member_id=" + encodeURIComponent(v);
+    fetch(u, { credentials: "same-origin", headers: { Accept: "application/json" } })
+      .then(function (r) { return r.ok ? r.json() : { ok: false }; })
+      .then(function (j) { setHint(elHint, v, j); })
+      .catch(function () {
+        elHint.textContent = "";
+      });
+  }
+  var inputA = document.getElementById("kin-a");
+  var inputB = document.getElementById("kin-b");
+  var hintA = document.getElementById("kin-hint-a");
+  var hintB = document.getElementById("kin-hint-b");
+  var runA = debounce(function () { fetchHint(inputA.value, hintA); }, 280);
+  var runB = debounce(function () { fetchHint(inputB.value, hintB); }, 280);
+  if (inputA) {
+    inputA.addEventListener("input", runA);
+    inputA.addEventListener("blur", function () { fetchHint(inputA.value, hintA); });
+    if (/^\d+$/.test(String(inputA.value || "").trim())) fetchHint(inputA.value, hintA);
+  }
+  if (inputB) {
+    inputB.addEventListener("input", runB);
+    inputB.addEventListener("blur", function () { fetchHint(inputB.value, hintB); });
+    if (/^\d+$/.test(String(inputB.value || "").trim())) fetchHint(inputB.value, hintB);
+  }
+})();
+</script>
 {% endblock %}

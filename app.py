@@ -9,8 +9,18 @@ import regex
 from collections import deque
 from decimal import ROUND_HALF_UP, Decimal
 from datetime import date
+from typing import Any
 from dotenv import load_dotenv
-from flask import Flask, current_app, flash, redirect, render_template, request, url_for
+from flask import (
+    Flask,
+    current_app,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 from flask_login import (
     LoginManager,
     current_user,
@@ -30,6 +40,26 @@ load_dotenv(encoding="utf-8")
 
 # generate_bulk_data.py 生成的谱名：模拟族谱1 … 模拟族谱10；网站侧不再展示与放行
 _BULK_MOCK_TITLE = re.compile(r"^模拟族谱\d+$")
+
+# 成员列表页：默认条数与每次「再展开」递增量（仅减少 HTML 体量，排序仍基于全量结果）
+_MEMBERS_LIST_INITIAL = 500
+_MEMBERS_LIST_STEP = 500
+
+
+def _parse_members_list_take(raw: str | None) -> int | None:
+    """解析 URL 参数 take：缺省为首批条数；'all' 为不截断；否则为当前展示上界（正整数）。"""
+    if raw is None:
+        return _MEMBERS_LIST_INITIAL
+    s = str(raw).strip()
+    if not s:
+        return _MEMBERS_LIST_INITIAL
+    if s.lower() in ("all", "全部"):
+        return None
+    try:
+        n = int(s)
+        return max(1, n)
+    except (ValueError, TypeError):
+        return _MEMBERS_LIST_INITIAL
 
 
 def _is_bulk_mock_genealogy_title(title: str) -> bool:
@@ -197,6 +227,33 @@ def _member_counts_by_tree_ids(session: Session, gid_list: list[int]) -> dict[in
     return {gid: counts.get(gid, 0) for gid in gid_list}
 
 
+def _member_gender_totals_for_tree(session: Session, tree_id: int) -> tuple[int, int, int]:
+    """单部族谱：总人数、男性数、女性数（性别枚举与总览 /dashboard 一致）。"""
+    total = session.scalar(
+        select(func.count()).select_from(Member).where(Member.tree_id == tree_id)
+    )
+    male = session.scalar(
+        select(func.count())
+        .select_from(Member)
+        .where(
+            Member.tree_id == tree_id,
+            or_(Member.gender == "M", Member.gender == "Male", Member.gender == "男"),
+        )
+    )
+    female = session.scalar(
+        select(func.count())
+        .select_from(Member)
+        .where(
+            Member.tree_id == tree_id,
+            or_(Member.gender == "F", Member.gender == "Female", Member.gender == "女"),
+        )
+    )
+    t = int(total or 0)
+    m = int(male or 0)
+    f = int(female or 0)
+    return t, m, f
+
+
 def _year_from_form_field(raw: str) -> int | None:
     """从 YYYY-MM-DD(date 控件)或纯数字年份解析为整数年份。"""
     s = raw.strip()
@@ -224,37 +281,43 @@ def _iso_date_from_form_prefix(raw: str) -> date | None:
         return None
 
 
-def _parse_member_years_from_form() -> tuple[int | None, int | None] | None:
-    """解析 POST 中的出生年、去世年(date 字段名 birth_date / death_date,与 birth_year/death_year 列一致)"""
+def _parse_member_life_dates_from_form() -> tuple[date, date | None] | None:
+    """解析 POST birth_date / death_date（必填出生）；入库写入 birth_date/death_date 及对 year 列。"""
     by = request.form.get("birth_date", "").strip() or request.form.get("birth_year", "").strip()
     dy = request.form.get("death_date", "").strip() or request.form.get("death_year", "").strip()
-    bi = _year_from_form_field(by) if by else None
-    di = _year_from_form_field(dy) if dy else None
-    if by and bi is None:
-        flash("出生日期格式无效")
+    if not by:
+        flash("请填写出生日期")
         return None
-    if dy and di is None:
-        flash("去世日期格式无效")
-        return None
+
+    bd = _iso_date_from_form_prefix(by)
+    if bd is None:
+        bi = _year_from_form_field(by)
+        if bi is None:
+            flash("出生日期格式无效")
+            return None
+        bd = date(bi, 1, 1)
+
+    dd: date | None = None
+    if dy.strip():
+        dd = _iso_date_from_form_prefix(dy)
+        if dd is None:
+            di = _year_from_form_field(dy)
+            if di is None:
+                flash("去世日期格式无效")
+                return None
+            dd = date(di, 1, 1)
+
     today = date.today()
-    bd = _iso_date_from_form_prefix(by) if by else None
-    dd = _iso_date_from_form_prefix(dy) if dy else None
-    if bd is not None and bd > today:
+    if bd > today:
         flash("出生日期不能晚于今天")
         return None
     if dd is not None and dd > today:
         flash("去世日期不能晚于今天")
         return None
-    if bd is None and bi is not None and bi > today.year:
-        flash("出生年不能晚于当前年份")
+    if dd is not None and dd < bd:
+        flash("去世日期须不早于出生日期")
         return None
-    if dd is None and di is not None and di > today.year:
-        flash("去世年不能晚于当前年份")
-        return None
-    if bi is not None and di is not None and di < bi:
-        flash("去世年须不早于出生年")
-        return None
-    return (bi, di)
+    return (bd, dd)
 
 
 def _validate_member_cn_name(raw: str) -> str | None:
@@ -309,6 +372,91 @@ def _is_female_gender(g: str) -> bool:
     return u in ("F", "FEMALE", "女")
 
 
+def _member_effective_birth_day(m: Member) -> date:
+    """成员列表排序用生日：有完整 birth_date 优先；仅有 birth_year 则按当年 1 月 1 日；都无则排到同段末尾。"""
+    if m.birth_date is not None:
+        return m.birth_date
+    if m.birth_year is not None:
+        try:
+            return date(int(m.birth_year), 1, 1)
+        except (ValueError, TypeError):
+            pass
+    return date(9999, 12, 31)
+
+
+def _members_list_display_order(members: list[Member]) -> list[Member]:
+    """成员界面行序：辈分升序。
+    - 第一辈（generation_level==1）：男在前、女在后，同性内出生越早越靠前。
+    - 第二辈及以后：同辈内先列出夫妻（互为 spouse_id、同辈），每组男在前女在后；
+      多组夫妻按男方生日升序（年龄越大越靠前）。
+      无配偶或与配偶非同辈的成员排在其后，按生日升序（年龄越大越靠前），不按性别分段。
+    """
+    if not members:
+        return []
+
+    def cohort_key(gl: int | None) -> int:
+        return 10**9 if gl is None else int(gl)
+
+    by_gen: dict[int, list[Member]] = {}
+    for mm in members:
+        by_gen.setdefault(cohort_key(mm.generation_level), []).append(mm)
+
+    out: list[Member] = []
+    for g in sorted(by_gen.keys()):
+        cohort = list(by_gen[g])
+        if g == 1:
+            males = [x for x in cohort if _is_male_gender(x.gender or "")]
+            females = [x for x in cohort if _is_female_gender(x.gender or "")]
+            mids = {x.member_id for x in males}
+            fids = {x.member_id for x in females}
+            others = [
+                x for x in cohort if x.member_id not in mids and x.member_id not in fids
+            ]
+            males.sort(key=_member_effective_birth_day)
+            females.sort(key=_member_effective_birth_day)
+            others.sort(key=_member_effective_birth_day)
+            out.extend(males + females + others)
+            continue
+
+        by_id = {x.member_id: x for x in cohort}
+        paired: set[int] = set()
+        couples_ordered: list[tuple[Member, Member]] = []
+
+        for m in cohort:
+            if m.member_id in paired:
+                continue
+            sid_raw = m.spouse_id
+            if sid_raw is None:
+                continue
+            o = by_id.get(int(sid_raw))
+            if o is None:
+                continue
+            if o.spouse_id != m.member_id:
+                continue
+            if cohort_key(m.generation_level) != cohort_key(o.generation_level):
+                continue
+            if _is_male_gender(m.gender or "") and _is_female_gender(o.gender or ""):
+                first, second = m, o
+            elif _is_female_gender(m.gender or "") and _is_male_gender(o.gender or ""):
+                first, second = o, m
+            else:
+                first, second = (m, o) if m.member_id < o.member_id else (o, m)
+            couples_ordered.append((first, second))
+            paired.add(m.member_id)
+            paired.add(o.member_id)
+
+        couples_ordered.sort(key=lambda pr: _member_effective_birth_day(pr[0]))
+        for a, b in couples_ordered:
+            out.append(a)
+            out.append(b)
+
+        singles = [x for x in cohort if x.member_id not in paired]
+        singles.sort(key=_member_effective_birth_day)
+        out.extend(singles)
+
+    return out
+
+
 def _gender_label_cn(g: str) -> str:
     """用于错误提示中的性别描述。"""
     if _is_male_gender(g):
@@ -334,11 +482,11 @@ def _gender_cn_filter(g: str | None) -> str:
     return _gender_display_cn(g)
 
 
-def _format_genealogy_display_title(first_male_name: str | None, tree_id: int) -> str:
-    """谱名：首名男性姓名 + 支（树Y），Y 为 genealogy.id；无男性时用占位。"""
+def _format_genealogy_display_title(first_male_name: str | None, _tree_id: int) -> str:
+    """谱名展示：有首名男性时为「姓名+支」；无男性时为占位+支。第二参数保留以兼容旧调用，不再拼入标题。"""
     if first_male_name and first_male_name.strip():
-        return f"{first_male_name.strip()}支（树{tree_id}）"
-    return f"（无男性成员）支（树{tree_id}）"
+        return f"{first_male_name.strip()}支"
+    return "（无男性成员）支"
 
 
 def _first_male_name_in_tree(session: Session, tree_id: int) -> str | None:
@@ -379,7 +527,7 @@ def _display_genealogy_list_titles(
     session: Session, genealogy_rows: list[Genealogy]
 ) -> dict[int, str]:
     """
-    总览/族谱列表：若已有男性成员，则按首名男性（member_id 最小）+ 支（树id）；
+    总览/族谱列表：若已有男性成员，则按首名男性（member_id 最小）+「支」组成展示谱名；
     若无男性成员，则显示用户在库中保存的谱名（可为空，不强制「无男性成员」占位）。
     """
     if not genealogy_rows:
@@ -910,30 +1058,87 @@ def members_list(gid: int):
         flash("无权访问")
         return redirect(url_for("genealogies"))
     q = request.args.get("q", "").strip()
+    take_limit = _parse_members_list_take(request.args.get("take"))
     try:
         with Session(engine) as s:
-            ordered_ids = s.scalars(
-                select(Member.member_id)
-                .where(Member.tree_id == gid)
-                .order_by(Member.member_id)
-            ).all()
-            rank_map = {mid: i + 1 for i, mid in enumerate(ordered_ids)}
             stmt = select(Member).where(Member.tree_id == gid)
             if q:
                 stmt = stmt.where(
                     Member.name.ilike(f"%{_escape_like_pattern(q)}%", escape="\\")
                 )
-            stmt = stmt.order_by(Member.member_id)
-            rows = s.scalars(stmt).all()
+            ordered = _members_list_display_order(list(s.scalars(stmt).all()))
+            matched_n = len(ordered)
+            rank_map = {m.member_id: i + 1 for i, m in enumerate(ordered)}
+            rows = ordered if take_limit is None else ordered[:take_limit]
+            show_members_expand = take_limit is not None and matched_n > len(rows)
+            next_take = None
+            if show_members_expand and take_limit is not None:
+                next_take = min(take_limit + _MEMBERS_LIST_STEP, matched_n)
+            more_kw: dict[str, Any] = {"gid": gid, "take": next_take}
+            all_kw: dict[str, Any] = {"gid": gid, "take": "all"}
+            if q:
+                more_kw["q"] = q
+                all_kw["q"] = q
+            members_more_url = (
+                url_for("members_list", **more_kw) if next_take is not None else ""
+            )
+            members_all_url = url_for("members_list", **all_kw)
+            history_kw: dict[str, Any] = {"gid": gid}
+            if q:
+                history_kw["q"] = q
+            if take_limit is None:
+                history_kw["take"] = "all"
+            else:
+                history_kw["take"] = take_limit
+            history_url = url_for("members_list", **history_kw)
+            t, m_cnt, f_cnt = _member_gender_totals_for_tree(s, gid)
     except SQLAlchemyError:
         current_app.logger.exception("members_list query failed (schema mismatch?)")
+        if request.args.get("partial") == "1":
+            return jsonify({"error": "load_failed"}), 500
         flash(
-            "无法加载成员：数据库 member 表与当前程序不一致。"
-            "请清空后执行 sql/01_schema.sql 与 sql/02_indexes.sql（列须与 members.csv 表头一致）。"
+            "无法加载成员：多半是数据库 member 表缺少程序需要的列（如 birth_date、death_date）。"
+            "请在本机对与 .env（GENEALOGY_DB_*）相同的数据库执行 sql/17_member_birth_death_date.sql，"
+            "或在新库运行 sql/01_schema.sql / 02_indexes.sql。"
+            "若已执行迁移仍报错，请核对网站连接的库名、主机、端口是否与执行 psql -d … 时一致，并查看运行 Flask 的终端里的详细报错。"
         )
         return redirect(url_for("genealogy_edit", gid=gid))
+    if request.args.get("partial") == "1":
+        return jsonify(
+            {
+                "tbody_html": render_template(
+                    "members_table_rows.html",
+                    gid=gid,
+                    rows=rows,
+                    rank_map=rank_map,
+                ),
+                "expand_html": (
+                    render_template(
+                        "members_expand_bar.html",
+                        show_members_expand=show_members_expand,
+                        members_more_url=members_more_url,
+                        members_all_url=members_all_url,
+                    )
+                    if show_members_expand
+                    else ""
+                ),
+                "history_url": history_url,
+            }
+        )
     return render_template(
-        "members.html", gid=gid, rows=rows, q=q, rank_map=rank_map
+        "members.html",
+        gid=gid,
+        rows=rows,
+        q=q,
+        rank_map=rank_map,
+        total=t,
+        male=m_cnt,
+        female=f_cnt,
+        male_pct=_pct_two_decimals(m_cnt, t),
+        female_pct=_pct_two_decimals(f_cnt, t),
+        show_members_expand=show_members_expand,
+        members_more_url=members_more_url,
+        members_all_url=members_all_url,
     )
 
 
@@ -945,10 +1150,10 @@ def member_new(gid: int):
         return redirect(url_for("genealogies"))
     with Session(engine) as s:
         if request.method == "POST":
-            parsed = _parse_member_years_from_form()
+            parsed = _parse_member_life_dates_from_form()
             if parsed is None:
                 return render_template("member_form.html", gid=gid, m=None)
-            by, dy = parsed
+            bd, dd = parsed
             try:
                 father_id = int(f) if (f := request.form.get("father_id", "").strip()) else None
                 mother_id = int(mo) if (mo := request.form.get("mother_id", "").strip()) else None
@@ -983,8 +1188,10 @@ def member_new(gid: int):
                 tree_id=gid,
                 name=nm,
                 gender=_normalize_form_gender(request.form.get("gender")) or "Male",
-                birth_year=by,
-                death_year=dy,
+                birth_date=bd,
+                death_date=dd,
+                birth_year=bd.year,
+                death_year=dd.year if dd else None,
                 bio=bio_raw.strip() or None,
                 father_id=father_id,
                 mother_id=mother_id,
@@ -1036,10 +1243,10 @@ def member_edit(gid: int, mid: int):
                     return redirect(url_for("members_list", gid=gid))
                 flash("已删除")
                 return redirect(url_for("members_list", gid=gid))
-            parsed = _parse_member_years_from_form()
+            parsed = _parse_member_life_dates_from_form()
             if parsed is None:
                 return render_template("member_form.html", gid=gid, m=m)
-            by, dy = parsed
+            bd, dd = parsed
             try:
                 father_id = int(fi) if (fi := request.form.get("father_id", "").strip()) else None
                 mother_id = int(moi) if (moi := request.form.get("mother_id", "").strip()) else None
@@ -1063,8 +1270,10 @@ def member_edit(gid: int, mid: int):
                 return render_template("member_form.html", gid=gid, m=m)
             m.name = nm
             m.gender = _normalize_form_gender(request.form.get("gender")) or m.gender
-            m.birth_year = by
-            m.death_year = dy
+            m.birth_date = bd
+            m.death_date = dd
+            m.birth_year = bd.year
+            m.death_year = dd.year if dd else None
             m.bio = bio_raw.strip() or None
             m.father_id = father_id
             m.mother_id = mother_id
@@ -1196,34 +1405,86 @@ def ancestors_view(gid: int):
         flash("无权访问")
         return redirect(url_for("genealogies"))
     mid = request.args.get("id", "").strip()
-    rows = []
-    if mid:
-        try:
-            mid_i = int(mid)
-        except ValueError:
-            flash("成员 ID 须为整数")
-            return render_template("ancestors.html", gid=gid, rows=[], mid=mid)
-        with Session(engine) as s:
+    rows: list[Any] = []
+    ancestor_lookup: dict[str, Any] | None = None
+    ancestor_queried = False
+
+    if not mid:
+        return render_template(
+            "ancestors.html",
+            gid=gid,
+            rows=[],
+            mid="",
+            ancestor_lookup=None,
+            ancestor_queried=False,
+        )
+    try:
+        mid_i = int(mid)
+    except ValueError:
+        flash("成员 ID 须为整数")
+        return render_template(
+            "ancestors.html",
+            gid=gid,
+            rows=[],
+            mid=mid,
+            ancestor_lookup=None,
+            ancestor_queried=False,
+        )
+
+    with Session(engine) as s:
+        m = s.get(Member, mid_i)
+        if not m or m.tree_id != gid:
+            ancestor_lookup = {"exists": False}
+        else:
+            is_root = m.father_id is None and m.mother_id is None
+            ancestor_lookup = {"exists": True, "name": m.name, "is_root": is_root}
             sql = text(
                 """
                 WITH RECURSIVE anc AS (
-                    SELECT member_id, name, gender, birth_year, father_id, mother_id, 0 AS hop,
+                    SELECT member_id, name, gender, birth_date, birth_year, father_id, mother_id, 0 AS hop,
                            ARRAY[member_id::bigint] AS path_ids
                     FROM member WHERE member_id = :mid AND tree_id = :gid
                     UNION ALL
-                    SELECT p.member_id, p.name, p.gender, p.birth_year, p.father_id, p.mother_id,
+                    SELECT p.member_id, p.name, p.gender, p.birth_date, p.birth_year, p.father_id, p.mother_id,
                            a.hop + 1, a.path_ids || p.member_id
                     FROM anc a
                     JOIN member p ON p.member_id = a.father_id OR p.member_id = a.mother_id
                     WHERE NOT (p.member_id = ANY (a.path_ids))
                 )
-                SELECT DISTINCT ON (member_id) member_id, name, gender, birth_year, hop
+                SELECT DISTINCT ON (member_id) member_id, name, gender, birth_date, birth_year, hop
                 FROM anc WHERE hop > 0 ORDER BY member_id, hop
                 """
             )
             raw = s.execute(sql, {"mid": mid_i, "gid": gid}).mappings().all()
             rows = sorted(raw, key=lambda r: (r["hop"], r["member_id"]))
-    return render_template("ancestors.html", gid=gid, rows=rows, mid=mid)
+            ancestor_queried = True
+
+    return render_template(
+        "ancestors.html",
+        gid=gid,
+        rows=rows,
+        mid=mid,
+        ancestor_lookup=ancestor_lookup,
+        ancestor_queried=ancestor_queried,
+    )
+
+
+@app.get("/genealogy/<int:gid>/api/member-hint")
+@login_required
+def api_member_hint(gid: int):
+    """供亲缘/祖先页输入 ID 时异步校验；本族谱成员返回 ok、name、is_root（无父母记录）。"""
+    if not user_can_access_genealogy(current_user.id, gid):
+        return jsonify(ok=False, error="forbidden"), 403
+    raw = request.args.get("member_id", "").strip()
+    if not raw.isdigit():
+        return jsonify(ok=False)
+    mid = int(raw)
+    with Session(engine) as s:
+        m = s.get(Member, mid)
+        if m and m.tree_id == gid:
+            is_root = m.father_id is None and m.mother_id is None
+            return jsonify(ok=True, member_id=mid, name=m.name, is_root=is_root)
+    return jsonify(ok=False, member_id=mid)
 
 
 @app.route("/genealogy/<int:gid>/kinship", methods=["GET", "POST"])
@@ -1232,31 +1493,46 @@ def kinship(gid: int):
     if not user_can_access_genealogy(current_user.id, gid):
         flash("无权访问")
         return redirect(url_for("genealogies"))
-    path_names: list[str] = []
-    a = b = None
+    path_items: list[tuple[int, str]] = []
+    a = ""
+    b = ""
+    name_a = name_b = None
     if request.method == "POST":
         a = request.form.get("a", "").strip()
         b = request.form.get("b", "").strip()
-        if a.isdigit() and b.isdigit():
-            with Session(engine) as s:
-                ma = s.get(Member, int(a))
-                mb = s.get(Member, int(b))
-                if (
-                    ma
-                    and mb
-                    and ma.tree_id == gid
-                    and mb.tree_id == gid
-                ):
-                    p = bfs_path(s, int(a), int(b))
-                    if p:
-                        for i in p:
-                            mm = s.get(Member, i)
-                            path_names.append(mm.name if mm else str(i))
-                    else:
-                        flash("两人之间未发现由血缘/婚姻连成的通路")
+
+    with Session(engine) as s:
+        if a.isdigit():
+            ma_n = s.get(Member, int(a))
+            if ma_n and ma_n.tree_id == gid:
+                name_a = ma_n.name
+        if b.isdigit():
+            mb_n = s.get(Member, int(b))
+            if mb_n and mb_n.tree_id == gid:
+                name_b = mb_n.name
+
+        if request.method == "POST" and a.isdigit() and b.isdigit():
+            ma = s.get(Member, int(a))
+            mb = s.get(Member, int(b))
+            if ma and mb and ma.tree_id == gid and mb.tree_id == gid:
+                chain = bfs_path(s, int(a), int(b))
+                if chain:
+                    for i in chain:
+                        mm = s.get(Member, i)
+                        path_items.append((i, mm.name if mm else "—"))
                 else:
-                    flash("成员 ID 须属于本族谱")
-    return render_template("kinship.html", gid=gid, path=path_names, a=a, b=b)
+                    flash("两人之间未发现由血缘/婚姻连成的通路")
+            else:
+                flash("成员 ID 须属于本族谱")
+    return render_template(
+        "kinship.html",
+        gid=gid,
+        path=path_items,
+        a=a,
+        b=b,
+        name_a=name_a,
+        name_b=name_b,
+    )
 
 
 @app.cli.command("init-db")
