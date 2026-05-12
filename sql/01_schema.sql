@@ -37,7 +37,7 @@ CREATE TABLE member (
     birth_year        INTEGER CHECK (birth_year IS NULL OR (birth_year >= 800 AND birth_year <= 3000)),
     death_year        INTEGER CHECK (death_year IS NULL OR (death_year >= 800 AND death_year <= 3000)),
     bio               TEXT,
-    generation_level  INTEGER CHECK (generation_level IS NULL OR generation_level >= 0),
+    generation_level  INTEGER CHECK (generation_level IS NULL OR generation_level >= 1),
     father_id         BIGINT REFERENCES member(member_id) ON DELETE SET NULL ON UPDATE CASCADE,
     mother_id         BIGINT REFERENCES member(member_id) ON DELETE SET NULL ON UPDATE CASCADE,
     spouse_id         BIGINT REFERENCES member(member_id) ON DELETE SET NULL ON UPDATE CASCADE,

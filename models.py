@@ -118,4 +118,8 @@ class Member(Base):
             "gender IN ('M','F','Male','Female','男','女')",
             name="ck_member_gender_csv",
         ),
+        CheckConstraint(
+            "generation_level IS NULL OR generation_level >= 1",
+            name="ck_member_generation_min_1",
+        ),
     )

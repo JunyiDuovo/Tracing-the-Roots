@@ -39,18 +39,28 @@
       <div class="field-row">
         <div class="field">
           <label for="birth_date">出生年月日</label>
-          <input id="birth_date" name="birth_date" type="date" value="{{ bdv }}" min="0800-01-01">
+          <div class="member-date-slot">
+            <input id="birth_date" class="member-date-input" name="birth_date" type="date"
+              placeholder="年/月/日" title="请选择公历年月日（与下方说明一致）" value="{{ bdv }}" min="0800-01-01" lang="zh-Hans-CN">
+            <span class="member-date-slot__hint" aria-hidden="true" {% if bdv %}hidden{% endif %}>年/月/日</span>
+          </div>
         </div>
         <div class="field">
           <label for="death_date">去世年月日（可选）</label>
-          <input id="death_date" name="death_date" type="date" value="{{ ddv }}" min="0800-01-01">
+          <div class="member-date-slot">
+            <input id="death_date" class="member-date-input" name="death_date" type="date"
+              placeholder="年/月/日" title="可选；公历年月日" value="{{ ddv }}" min="0800-01-01" lang="zh-Hans-CN">
+            <span class="member-date-slot__hint" aria-hidden="true" {% if ddv %}hidden{% endif %}>年/月/日</span>
+          </div>
         </div>
       </div>
       <p class="field-hint">出生、去世均为公历日期；选择与日历一致的闰年与每月天数（如 2 月 29 日仅闰年可选）。出生、去世均不可选今天之后的日期，去世不可早于出生。</p>
 
       <div class="field">
         <label for="generation_level">辈分 generation_level</label>
-        <input id="generation_level" name="generation_level" type="number" value="{% if request.method == 'POST' %}{{ request.form.get('generation_level', '') }}{% else %}{{ m.generation_level if m and m.generation_level is not none else '' }}{% endif %}">
+        <p class="field-hint">可留空；若填写须为 <strong>不小于 1 的自然数</strong>（1 表示第一辈）。</p>
+        <input id="generation_level" name="generation_level" type="number" inputmode="numeric" min="1" step="1"
+          value="{% if request.method == 'POST' %}{{ request.form.get('generation_level', '') }}{% else %}{{ m.generation_level if m and m.generation_level is not none else '' }}{% endif %}">
       </div>
 
       <h3 class="subsection-title">亲属关联（member_id）</h3>
@@ -93,6 +103,16 @@
   var death = document.getElementById('death_date');
   if (!birth || !death) return;
 
+  function refreshMemberDateHint(inp) {
+    var wrap = inp.closest('.member-date-slot');
+    if (!wrap) return;
+    var hint = wrap.querySelector('.member-date-slot__hint');
+    if (!hint) return;
+    var empty = !inp.value;
+    inp.classList.toggle('member-date-input--show-cn-hint', empty);
+    hint.hidden = !empty || document.activeElement === inp;
+  }
+
   function todayLocalISO() {
     var d = new Date();
     var y = d.getFullYear();
@@ -120,7 +140,22 @@
     } else {
       death.min = ABS_MIN;
     }
+    refreshMemberDateHint(birth);
+    refreshMemberDateHint(death);
   }
+
+  birth.addEventListener('focus', function () {
+    refreshMemberDateHint(birth);
+  });
+  birth.addEventListener('blur', function () {
+    refreshMemberDateHint(birth);
+  });
+  death.addEventListener('focus', function () {
+    refreshMemberDateHint(death);
+  });
+  death.addEventListener('blur', function () {
+    refreshMemberDateHint(death);
+  });
 
   birth.addEventListener('change', syncDateBounds);
   birth.addEventListener('input', syncDateBounds);

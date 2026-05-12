@@ -3,16 +3,19 @@
 """
 from __future__ import annotations
 
+import csv
 import os
 import re
 import regex
 from collections import deque
 from decimal import ROUND_HALF_UP, Decimal
 from datetime import date
+from io import StringIO
 from typing import Any
 from dotenv import load_dotenv
 from flask import (
     Flask,
+    Response,
     current_app,
     flash,
     jsonify,
@@ -34,6 +37,10 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from werkzeug.exceptions import RequestEntityTooLarge
+
+from member_csv_format import MEMBER_CSV_HEADERS
+from member_csv_import import execute_replace_members_copy, validate_and_build_copy_buffer
 from models import Base, Genealogy, GenealogyCollaborator, Member, User
 
 load_dotenv(encoding="utf-8")
@@ -112,12 +119,27 @@ def _database_connect_arg():
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 
+_max_upload_mb = int(os.environ.get("MAX_UPLOAD_MB", "256"))
+if _max_upload_mb > 0:
+    app.config["MAX_CONTENT_LENGTH"] = _max_upload_mb * 1024 * 1024
+
 engine = create_engine(_database_connect_arg(), pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "login"
+
+
+@app.errorhandler(RequestEntityTooLarge)
+def _upload_too_large(_e: RequestEntityTooLarge):
+    flash(
+        f"上传文件超过大小限制（当前限制约 {_max_upload_mb} MB）。"
+        "可在环境变量 MAX_UPLOAD_MB 中调大并设为大于 0 的整数后重启服务。"
+    )
+    if current_user.is_authenticated:
+        return redirect(url_for("dashboard"))
+    return redirect(url_for("index"))
 
 
 @app.context_processor
@@ -140,6 +162,8 @@ def inject_back_nav():
     if ep == "dashboard":
         return {"back_nav": None}
     if ep == "genealogies":
+        return {"back_nav": {"url": url_for("dashboard"), "label": "总览"}}
+    if ep == "profile":
         return {"back_nav": {"url": url_for("dashboard"), "label": "总览"}}
     if ep == "genealogy_new":
         return {"back_nav": {"url": url_for("genealogies"), "label": "族谱列表"}}
@@ -331,6 +355,20 @@ def _validate_member_cn_name(raw: str) -> str | None:
     return None
 
 
+def _generation_level_from_form(raw: str | None) -> tuple[int | None, str | None]:
+    """表单辈分：留空为 None；否则须为整数且 >= 1。"""
+    gn = (raw or "").strip()
+    if not gn:
+        return None, None
+    try:
+        gl = int(gn)
+    except ValueError:
+        return None, "辈分须为整数，不填时请留空"
+    if gl < 1:
+        return None, "辈分须为不小于 1 的自然数（1 表示第一辈），不填时请留空"
+    return gl, None
+
+
 _BIO_MAX_LEN = 500
 _USER_USERNAME_MAX = 64
 _USER_EMAIL_MAX = 128
@@ -341,6 +379,53 @@ _GENEALOGY_SURNAME_MAX = 64
 def _escape_like_pattern(s: str) -> str:
     """转义 ILIKE/LIKE 中的 %、_ 与反斜杠，避免用户搜索被当作通配符。"""
     return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _member_export_csv_row(m: Member) -> list[Any]:
+    """与 member_csv_format / 导入校验列顺序一致。"""
+    return [
+        m.member_id,
+        m.tree_id,
+        m.name,
+        m.gender,
+        m.birth_date.isoformat() if m.birth_date is not None else "",
+        m.death_date.isoformat() if m.death_date is not None else "",
+        m.birth_year if m.birth_year is not None else "",
+        m.death_year if m.death_year is not None else "",
+        (m.bio or "").replace("\r\n", "\n"),
+        m.generation_level if m.generation_level is not None else "",
+        m.father_id if m.father_id is not None else "",
+        m.mother_id if m.mother_id is not None else "",
+        m.spouse_id if m.spouse_id is not None else "",
+    ]
+
+
+def _member_csv_export_stream(gids: list[int]):
+    """按 tree_id、member_id 排序，分块输出 UTF-8（含 BOM）CSV 字节流。"""
+    header_io = StringIO()
+    csv.writer(header_io).writerow(MEMBER_CSV_HEADERS)
+    yield ("\ufeff" + header_io.getvalue()).encode("utf-8")
+
+    buf = StringIO()
+    writer = csv.writer(buf)
+    chunk_rows = 0
+    with Session(engine) as s:
+        stmt = (
+            select(Member)
+            .where(Member.tree_id.in_(gids))
+            .order_by(Member.tree_id, Member.member_id)
+            .execution_options(yield_per=800)
+        )
+        for m in s.scalars(stmt):
+            writer.writerow(_member_export_csv_row(m))
+            chunk_rows += 1
+            if chunk_rows >= 800:
+                yield buf.getvalue().encode("utf-8")
+                buf.seek(0)
+                buf.truncate(0)
+                chunk_rows = 0
+    if buf.tell():
+        yield buf.getvalue().encode("utf-8")
 
 
 def _validate_bio_len(raw: str) -> str | None:
@@ -814,6 +899,46 @@ def logout():
     return redirect(url_for("login"))
 
 
+@app.route("/profile", methods=["GET", "POST"])
+@login_required
+def profile():
+    """个人主页：修改密码成功后登出并回到首页以便重新登录。"""
+    if request.method == "POST":
+        cur = request.form.get("current_password", "")
+        new = request.form.get("new_password", "")
+        cnf = request.form.get("confirm_password", "")
+        if not cur or not new or not cnf.strip():
+            flash("请填写当前密码、新密码与确认密码")
+            return render_template("profile.html")
+        cnf_s = cnf.strip()
+        if new != cnf_s:
+            flash("两次输入的新密码不一致")
+            return render_template("profile.html")
+        if new == cur:
+            flash("新密码不能与当前密码相同")
+            return render_template("profile.html")
+        try:
+            with Session(engine) as s:
+                u = s.get(User, current_user.id)
+                if not u:
+                    logout_user()
+                    flash("会话已失效，请重新登录")
+                    return redirect(url_for("index"))
+                if not check_password_hash(u.password_hash, cur):
+                    flash("当前密码不正确")
+                    return render_template("profile.html")
+                u.password_hash = generate_password_hash(new)
+                s.commit()
+        except SQLAlchemyError as e:
+            current_app.logger.exception("profile password change failed")
+            _flash_db_error(e)
+            return render_template("profile.html")
+        logout_user()
+        flash("密码已修改，您已退出登录，请使用新密码前往「登录」页面。")
+        return redirect(url_for("index"))
+    return render_template("profile.html")
+
+
 @app.route("/dashboard")
 @login_required
 def dashboard():
@@ -868,6 +993,102 @@ def dashboard():
         genealogies=gens,
         member_counts=member_counts,
         display_titles=display_titles,
+    )
+
+
+@app.route("/dashboard/import-members", methods=["POST"])
+@login_required
+def dashboard_import_members_csv():
+    """上传与本站导出格式一致的 CSV，重写文件中涉及的全部族谱成员。"""
+    allowed_set = set(accessible_genealogy_ids(current_user.id))
+    if not allowed_set:
+        flash("您暂无在总览中可操作的族谱，无法导入成员。")
+        return redirect(url_for("dashboard"))
+
+    uf = request.files.get("csv_file")
+    if not uf or not (uf.filename or "").strip():
+        flash(
+            "请先选择本地的 CSV 文件（建议直接使用总览「导出族谱」生成的文件在原表结构上编辑）。"
+        )
+        return redirect(url_for("dashboard"))
+
+    try:
+        raw = uf.read()
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        flash(
+            "文件须为 UTF-8 编码。请另存为「CSV UTF-8（逗号分隔）」或使用记事本选择编码 UTF-8 后再导入。"
+        )
+        return redirect(url_for("dashboard"))
+
+    with Session(engine) as s:
+        existing_tree_ids = set(s.scalars(select(Genealogy.id)).all())
+
+    errors, buf, trees, row_count = validate_and_build_copy_buffer(
+        text, allowed_set, existing_tree_ids
+    )
+    if errors:
+        flash("导入未执行。请先按下述提示修正 CSV 后再重新选择文件导入。")
+        for msg in errors[:40]:
+            flash(msg)
+        if len(errors) > 40:
+            flash(f"（另有 {len(errors) - 40} 条错误未逐条展示。）")
+        return redirect(url_for("dashboard"))
+
+    assert buf is not None
+
+    try:
+        execute_replace_members_copy(engine, buf, sorted(trees))
+    except Exception as e:
+        current_app.logger.exception("dashboard CSV import COPY failed")
+        detail = str(e)
+        diag = getattr(e, "diag", None)
+        if diag is not None:
+            for attr in ("message_primary", "message_detail", "message_hint"):
+                part = getattr(diag, attr, None)
+                if part:
+                    detail = str(part)
+                    break
+        if "CONTEXT:" in detail:
+            detail = detail.split("CONTEXT:", 1)[0].strip()
+        flash(
+            "数据库写入未完成（已回滚）。若父母/配偶等外键无法在批量导入顺序下满足约束，请在 CSV 内调整行顺序或使用本站逐条录入。"
+        )
+        flash(detail[:2500])
+        return redirect(url_for("dashboard"))
+
+    with Session(engine) as s:
+        for tid in sorted(trees):
+            _touch_genealogy_revision_date(s, tid, None)
+        try:
+            s.commit()
+        except SQLAlchemyError as e:
+            current_app.logger.exception("revision_date update after CSV import failed")
+            _flash_db_error(e)
+
+    flash(
+        f"导入成功：已按文件重写 {len(trees)} 部族谱的全部成员（共 {row_count} 条）。"
+        "建议打开对应「成员」「树形」核对。"
+    )
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/dashboard/export-members.csv")
+@login_required
+def dashboard_export_members_csv():
+    """导出当前用户在总览上可访问的全部族谱成员为一份 CSV。"""
+    gids = accessible_genealogy_ids(current_user.id)
+    if not gids:
+        flash("暂无可导出的成员（无可用族谱）")
+        return redirect(url_for("dashboard"))
+    fname = f"members_all_genealogies_{date.today().isoformat()}.csv"
+    return Response(
+        _member_csv_export_stream(gids),
+        mimetype="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{fname}"',
+            "Cache-Control": "no-store",
+        },
     )
 
 
@@ -1142,6 +1363,24 @@ def members_list(gid: int):
     )
 
 
+@app.route("/genealogy/<int:gid>/export-members.csv")
+@login_required
+def members_export_genealogy_csv(gid: int):
+    """导出指定族谱下全部成员的 CSV。"""
+    if not user_can_access_genealogy(current_user.id, gid):
+        flash("无权访问")
+        return redirect(url_for("genealogies"))
+    fname = f"members_genealogy_{gid}_{date.today().isoformat()}.csv"
+    return Response(
+        _member_csv_export_stream([gid]),
+        mimetype="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{fname}"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
 @app.route("/genealogy/<int:gid>/member/new", methods=["GET", "POST"])
 @login_required
 def member_new(gid: int):
@@ -1175,15 +1414,11 @@ def member_new(gid: int):
             if bio_err:
                 flash(bio_err)
                 return render_template("member_form.html", gid=gid, m=None)
-            gn_raw = request.form.get("generation_level", "").strip()
-            if gn_raw:
-                try:
-                    gl = int(gn_raw)
-                except ValueError:
-                    flash("辈分须为整数，或留空")
-                    return render_template("member_form.html", gid=gid, m=None)
-            else:
-                gl = None
+            gn_raw = request.form.get("generation_level", "")
+            gl, gl_err = _generation_level_from_form(gn_raw)
+            if gl_err:
+                flash(gl_err)
+                return render_template("member_form.html", gid=gid, m=None)
             m = Member(
                 tree_id=gid,
                 name=nm,
@@ -1278,15 +1513,12 @@ def member_edit(gid: int, mid: int):
             m.father_id = father_id
             m.mother_id = mother_id
             m.spouse_id = spouse_id
-            gn = request.form.get("generation_level", "").strip()
-            if gn:
-                try:
-                    m.generation_level = int(gn)
-                except ValueError:
-                    flash("辈分须为整数，或留空")
-                    return render_template("member_form.html", gid=gid, m=m)
-            else:
-                m.generation_level = None
+            gn_raw = request.form.get("generation_level", "")
+            gl, gl_err = _generation_level_from_form(gn_raw)
+            if gl_err:
+                flash(gl_err)
+                return render_template("member_form.html", gid=gid, m=m)
+            m.generation_level = gl
             try:
                 _touch_genealogy_revision_date(
                     s, gid, request.form.get("revision_date_client_today")

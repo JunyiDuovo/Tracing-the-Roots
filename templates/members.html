@@ -8,7 +8,8 @@
       <p class="page-kicker">族谱 <span class="kbd">#{{ gid }}</span></p>
     </div>
     <div class="toolbar">
-      <a class="btn" href="{{ url_for('member_new', gid=gid) }}">新增成员</a>
+      <a class="btn secondary" href="{{ url_for('members_export_genealogy_csv', gid=gid) }}">导出族谱</a>
+      <a class="btn secondary" href="{{ url_for('member_new', gid=gid) }}">新增成员</a>
       <a class="btn secondary" href="{{ url_for('tree_preview', gid=gid) }}">树形预览</a>
       <a class="btn secondary" href="{{ url_for('ancestors_view', gid=gid) }}">祖先查询</a>
       <a class="btn secondary" href="{{ url_for('kinship', gid=gid) }}">亲缘通路</a>

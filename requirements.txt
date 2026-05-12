@@ -1,7 +1,25 @@
+# 寻根溯源 — Python 依赖（app.py、models.py、根目录 import random.py、scripts/*.py 共用）
+# 安装：pip install -r requirements.txt
+# 需 PostgreSQL；驱动为 psycopg2-binary（Windows 下一般无需本机 pg 编译环境）
+# 推荐解释器：Python 3.10+（与 SQLAlchemy 2 / Flask 3 兼容）
+
+# --- Web ---
 Flask>=3.0.0
 Flask-Login>=0.6.3
+Werkzeug>=3.0.0
+
+# --- 数据库（Flask 使用 postgresql+psycopg2；脚本直接使用 psycopg2）---
 SQLAlchemy>=2.0.0
 psycopg2-binary>=2.9.9
+
+# --- 配置与校验 ---
 python-dotenv>=1.0.0
-Werkzeug>=3.0.0
 regex>=2023.12.25
+
+# 以下由 Flask / SQLAlchemy 自动安装，一般不必写入；仅当 pip 解析异常时可取消注释固定版本：
+# Jinja2>=3.1.0
+# typing-extensions>=4.6.0
+# greenlet>=3.0.0
+
+# Linux 生产部署 WSGI（可选，本机开发通常用 flask run / python app.py）：
+# gunicorn>=22.0.0

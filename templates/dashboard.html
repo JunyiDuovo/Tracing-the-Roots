@@ -41,7 +41,16 @@
         <h2 class="section-title">我的族谱</h2>
         <p class="section-meta">共 <strong>{{ genealogies|length }}</strong> 部族谱</p>
       </div>
-      <a class="btn btn--sm" href="{{ url_for('genealogy_new') }}">新建族谱</a>
+      <div class="toolbar">
+        <form method="post" action="{{ url_for('dashboard_import_members_csv') }}" enctype="multipart/form-data" class="dashboard-csv-upload">
+          <label class="btn btn--sm secondary dashboard-csv-upload__label">
+            导入族谱
+            <input type="file" name="csv_file" accept=".csv,text/csv" hidden onchange="if (this.files && this.files.length) this.form.submit();">
+          </label>
+        </form>
+        <a class="btn btn--sm secondary" href="{{ url_for('dashboard_export_members_csv') }}">导出族谱</a>
+        <a class="btn btn--sm secondary" href="{{ url_for('genealogy_new') }}">新建族谱</a>
+      </div>
     </div>
     {% if genealogies %}
     <div class="table-wrap">

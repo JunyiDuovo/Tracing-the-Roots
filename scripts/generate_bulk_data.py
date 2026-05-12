@@ -64,7 +64,7 @@ def build_tree_fixed_ids(
         "birth_year": 1100,
         "death_year": 1175,
         "bio": "模拟始祖",
-        "generation_level": 0,
+        "generation_level": 1,
         "father_id": None,
         "mother_id": None,
         "spouse_id": None,
@@ -79,7 +79,7 @@ def build_tree_fixed_ids(
         gen += 1
         new_frontier: list[int] = []
         if not frontier:
-            pool = [r["member_id"] for r in rows if r["generation_level"] >= max(0, gen - 3)]
+            pool = [r["member_id"] for r in rows if r["generation_level"] >= max(1, gen - 3)]
             if not pool:
                 break
             frontier = random.sample(pool, min(100, len(pool)))
@@ -108,7 +108,7 @@ def build_tree_fixed_ids(
                     "birth_year": by,
                     "death_year": dy,
                     "bio": "",
-                    "generation_level": gen,
+                    "generation_level": gen + 1,
                     "father_id": father_id,
                     "mother_id": mother_id,
                     "spouse_id": None,

@@ -13,7 +13,7 @@
       {% if current_user.is_authenticated %}
       <a href="{{ url_for('dashboard') }}">总览</a>
       <a href="{{ url_for('genealogies') }}">族谱</a>
-      <span class="user">{{ current_user.username }}</span>
+      <a href="{{ url_for('profile') }}">个人主页</a>
       <a href="{{ url_for('logout') }}">退出</a>
       {% else %}
       <a href="{{ url_for('login') }}">登录</a>
@@ -92,5 +92,6 @@
   </script>
   {% endif %}
   {% endwith %}
+  <script defer src="{{ url_for('static', filename='js/password-toggle.js') }}"></script>
 </body>
 </html>

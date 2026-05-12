@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}个人主页 — 寻根溯源{% endblock %}
+{% block body %}
+<div class="page-inner page-inner--narrow">
+  <header class="page-header">
+    <h1 class="page-title">个人主页</h1>
+    <p class="page-kicker">账户：<span class="kbd">{{ current_user.username }}</span></p>
+  </header>
+
+  <section class="card card--elevated">
+    <h2 class="form-section-title">修改密码</h2>
+    <p class="field-hint">修改成功后系统将让您退出登录，请使用新密码从首页登录。</p>
+    <form method="post" class="form-stack" data-track-dirty="1" autocomplete="on">
+      <div class="field">
+        <label for="current_password">当前密码</label>
+        <div class="password-field js-password-field">
+          <input id="current_password" name="current_password" type="password" required autocomplete="current-password">
+        </div>
+      </div>
+      <div class="field">
+        <label for="new_password">新密码</label>
+        <div class="password-field js-password-field">
+          <input id="new_password" name="new_password" type="password" required autocomplete="new-password">
+        </div>
+      </div>
+      <div class="field">
+        <label for="confirm_password">确认新密码</label>
+        <div class="password-field js-password-field">
+          <input id="confirm_password" name="confirm_password" type="password" required autocomplete="new-password">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn" type="submit">保存新密码</button>
+      </div>
+    </form>
+  </section>
+</div>
+{% endblock %}
